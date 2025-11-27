@@ -1,11 +1,16 @@
-<!-- Archivo COMPLETO FINAL con estilo Siglo 21 + mapa + enter + logo -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Buscador de Centros</title>
+
   <style>
+    :root {
+      --verde21: #0c3b2e;
+      --verde21-light: #105c47;
+    }
+
     body {
       font-family: Arial, sans-serif;
       background-color: #f4f4f4;
@@ -13,17 +18,20 @@
       padding: 0;
       text-align: center;
     }
+
     header {
-      background-color: #0c3b2e;
+      background-color: var(--verde21);
       padding: 20px;
+      color: white;
+      font-size: 22px;
+      font-weight: bold;
     }
-    header img {
-      max-width: 180px;
-    }
+
     h1 {
-      margin-top: 20px;
-      color: #0c3b2e;
+      margin-top: 25px;
+      color: var(--verde21);
     }
+
     .card {
       background: white;
       width: 90%;
@@ -33,6 +41,7 @@
       border-radius: 15px;
       box-shadow: 0 4px 10px rgba(0,0,0,0.15);
     }
+
     input {
       width: 90%;
       padding: 12px;
@@ -41,8 +50,9 @@
       font-size: 16px;
       margin-bottom: 10px;
     }
+
     button {
-      background-color: #0c3b2e;
+      background-color: var(--verde21);
       color: white;
       border: none;
       padding: 12px 22px;
@@ -51,40 +61,47 @@
       cursor: pointer;
       transition: 0.3s;
     }
+
     button:hover {
-      background-color: #105c47;
+      background-color: var(--verde21-light);
     }
-    #resultado {
-      margin-top: 15px;
-      font-size: 18px;
-      font-weight: bold;
-      color: #0c3b2e;
-    }
-    iframe {
-      margin-top: 20px;
+
+    /* Tarjeta de resultado */
+    #resultado-card {
+      display:none;
+      background:#ffffff;
+      width:90%;
+      max-width:550px;
+      margin:20px auto;
+      padding:20px;
+      border-radius:15px;
+      box-shadow:0 4px 10px rgba(0,0,0,0.1);
+      text-align:left;
+      border-left:8px solid var(--verde21);
+      opacity:0;
+      transform: translateY(10px);
+      transition: all 0.4s ease;
     }
   </style>
 </head>
+
 <body>
 
-<header>
-  <img src="https://www.universidadsiglo21.edu.ar/themes/custom/us21/logo.svg" />
-</header>
-
-<div id="resultado-card" style="display:none; background:#ffffff; width:90%; max-width:550px; margin:20px auto; padding:20px; border-radius:15px; box-shadow:0 4px 10px rgba(0,0,0,0.1); text-align:left; border-left:8px solid #0c3b2e; opacity:0; transform: translateY(10px); transition: all 0.4s ease;">
-  <h2 style="margin:0; color:#0c3b2e; display:flex; align-items:center; gap:8px;"><span>📍</span> Resultado</h2>
-  <div id="resultado" style="margin-top:10px; font-size:16px;"></div>
-</div>
+<header>Buscador de Centros</header>
 
 <h1>Buscador de Centros más Cercanos</h1>
 
 <div class="card">
   <input id="localidad" placeholder="Ingresá tu localidad..." />
   <button onclick="buscarCentro()">Buscar centro</button>
-  <div id="resultado"></div>
 </div>
 
-<iframe id="mapa" width="100%" height="350" style="border:0; border-radius: 1rem;" allowfullscreen loading="lazy"></iframe>
+<div id="resultado-card">
+  <h2 style="margin:0; color:#0c3b2e; display:flex; align-items:center; gap:8px;">
+    <span>📍</span> Resultado
+  </h2>
+  <div id="resultado" style="margin-top:10px; font-size:16px;"></div>
+</div>
 
 <script>
   const centros = [
@@ -106,14 +123,15 @@
     fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${localidad} Buenos Aires Argentina`)
       .then(res => res.json())
       .then(data => {
+        const card = document.getElementById("resultado-card");
+
         if (data.length === 0) {
-          const card = document.getElementById("resultado-card");
-        card.style.display = 'block';
-        setTimeout(()=>{
-          card.style.opacity = '1';
-          card.style.transform = 'translateY(0)';
-        },10);
-        document.getElementById("resultado").innerText = "No se encontró la localidad";
+          card.style.display = 'block';
+          setTimeout(() => {
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+          }, 20);
+          document.getElementById("resultado").innerText = "No se encontró la localidad.";
           return;
         }
 
@@ -131,154 +149,24 @@
           }
         });
 
-        document.getElementById("resultado").innerHTML = `Centro más cercano:<br><b>${centroCercano.nombre}</b><br>${centroCercano.direccion}<br><br>Distancia aproximada: <b>${(menorDist * 111).toFixed(2)} km</b>`;
-        mostrarMapa(centroCercano.lat, centroCercano.lon, lat, lon);
+        card.style.display = 'block';
+        setTimeout(() => {
+          card.style.opacity = '1';
+          card.style.transform = 'translateY(0)';
+        }, 20);
+
+        document.getElementById("resultado").innerHTML =
+          `<b>Centro más cercano:</b><br>${centroCercano.nombre}<br>
+           <b>Dirección:</b> ${centroCercano.direccion}<br>
+           <b>Distancia aprox:</b> ${(menorDist * 111).toFixed(2)} km`;
       });
   }
 
   // ENTER para buscar
-  document.getElementById("localidad").addEventListener("keypress", function(e) {
+  document.getElementById("localidad").addEventListener("keypress", e => {
     if (e.key === "Enter") buscarCentro();
   });
-
-  // Mapa con marcador
-  function mostrarMapa(latCentro, lonCentro, latUser = null, lonUser = null) {
-    const iframe = document.getElementById('mapa');
-    if (latUser && lonUser) {
-      iframe.src = `https://www.google.com/maps/dir/${latUser},${lonUser}/${latCentro},${lonCentro}/@${latCentro},${lonCentro},14z`; 
-    } else {
-      iframe.src = `https://www.google.com/maps?q=${latCentro},${lonCentro}&z=15&output=embed`;
-    }
-  }
 </script>
 
 </body>
 </html>
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Buscador de Centro Más Cercano</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f5f5f5;
-      padding: 30px;
-    }
-    .container {
-      max-width: 600px;
-      margin: auto;
-      background: white;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-    }
-    input, button {
-      width: 100%;
-      padding: 12px;
-      margin-top: 10px;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-      font-size: 16px;
-    }
-    button {
-      background: #007bff;
-      color: white;
-      cursor: pointer;
-    }
-    button:hover {
-      background: #005fcc;
-    }
-    .result {
-      margin-top: 20px;
-      padding: 15px;
-      background: #e8f4ff;
-      border-radius: 8px;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h2>Buscador de Centro Más Cercano</h2>
-    <p>Ingresá una localidad o dirección y calculo cuál de los 9 centros te queda más cerca.</p>
-
-    <input id="localidad" placeholder="Ej: San Telmo" />
-    <button onclick="buscarCentro()">Buscar centro más cercano</button>
-
-    <div id="resultado" class="result" style="display:none"></div>
-  </div>
-
-  <script>
-    // Lista de centros con coordenadas aproximadas
-    const centros = [
-      { nombre: "San Miguel", direccion: "Av. León Gallardo 207", lat: -34.5437, lon: -58.7126 },
-      { nombre: "Don Torcuato", direccion: "Av. Ángel T. de Alvear 2555", lat: -34.4879, lon: -58.6251 },
-      { nombre: "Hurlingham", direccion: "Arturo Jauretche 1435", lat: -34.5888, lon: -58.6394 },
-      { nombre: "Cañuelas", direccion: "Av. Libertad 1200", lat: -35.0586, lon: -58.7602 },
-      { nombre: "San Martín", direccion: "Sarmiento 1887", lat: -34.5745, lon: -58.5451 },
-      { nombre: "Parque Leloir", direccion: "Av. Martín Fierro 3246", lat: -34.6280, lon: -58.6692 },
-      { nombre: "Munro", direccion: "Av. Vélez Sarsfield 4898", lat: -34.5230, lon: -58.5203 },
-      { nombre: "Merlo", direccion: "Avellaneda 598", lat: -34.6684, lon: -58.7295 },
-      { nombre: "Banfield", direccion: "Vieytes 211", lat: -34.7438, lon: -58.3942 }
-    ];
-
-    function haversine(lat1, lon1, lat2, lon2) {
-      const R = 6371;
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
-      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    }
-
-    async function buscarCentro() {
-      const query = document.getElementById("localidad").value;
-      if (!query) return;
-
-      // Geocodificación usando Nominatim (OpenStreetMap)
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query + ', Buenos Aires, Argentina')}`;
-      const res = await fetch(url);
-      const data = await res.json();
-
-      if (!data[0]) {
-        alert("No se pudo encontrar la localidad.");
-        return;
-      }
-
-      const lat = parseFloat(data[0].lat);
-      const lon = parseFloat(data[0].lon);
-
-      let mejor = null;
-      let mejorDistancia = Infinity;
-
-      centros.forEach(c => {
-        const d = haversine(lat, lon, c.lat, c.lon);
-        if (d < mejorDistancia) {
-          mejorDistancia = d;
-          mejor = c;
-        }
-      });
-
-      document.getElementById("resultado").style.display = "block";
-      document.getElementById("resultado").innerHTML = `
-        <strong>Centro más cercano:</strong> ${mejor.nombre}<br>
-        <strong>Dirección:</strong> ${mejor.direccion}<br>
-        <strong>Distancia aproximada:</strong> ${mejorDistancia.toFixed(2)} km
-      `;
-    }
-    // Mostrar mapa con marcador
-  function mostrarMapa(lat, lon) {
-    const iframe = document.getElementById('mapa');
-    iframe.src = `https://www.google.com/maps?q=${lat},${lon}&z=15&output=embed`;
-  }
-</script>
-
-<!-- Contenedor del mapa -->
-<div class="mt-6">
-  <iframe id="mapa" width="100%" height="350" style="border:0; border-radius: 1rem;" allowfullscreen loading="lazy"></iframe>
-</div>
-
-</body>
-</html>
-
-
