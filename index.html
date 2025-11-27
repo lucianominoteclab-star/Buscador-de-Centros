@@ -1,25 +1,120 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Buscador Interactivo - Encuentra Centros Cercanos</title>
-    <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<title>Buscador de Centros</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        max-width: 600px;
+        margin: 40px auto;
+        padding: 20px;
+    }
+    input {
+        width: 100%;
+        padding: 12px;
+        margin-top: 10px;
+        font-size: 18px;
+    }
+    button {
+        width: 100%;
+        margin-top: 15px;
+        padding: 12px;
+        font-size: 18px;
+        cursor: pointer;
+    }
+    #resultado {
+        margin-top: 20px;
+        font-size: 20px;
+        font-weight: bold;
+    }
+</style>
 </head>
 <body>
-<header>
-    <h1>🔍 Buscador de Centros</h1>
-</header>
 
-<main>
-    <section class="search-section">
-        <h2>Encontrá tu centro</h2>
-        <input type="text" id="searchInput" placeholder="Escribí una provincia, ciudad o sede...">
-    </section>
+<h2>Buscador del Centro Más Cercano</h2>
+<p>Ingresá una localidad de Buenos Aires (Ej: San Miguel, Banfield, Merlo, Munro...)</p>
 
-    <section id="results"></section>
-</main>
+<input type="text" id="localidad" placeholder="Ej: San Telmo, San Miguel, Lomas, etc.">
+<button onclick="buscarCentro()">Buscar centro cercano</button>
 
-<script src="script.js"></script>
+<div id="resultado"></div>
+
+<script>
+// Lista REAL de tus 9 centros
+const centros = [
+    { nombre: "San Miguel", direccion: "Av. León Gallardo 207", lat: -34.5346, lon: -58.7087 },
+    { nombre: "Don Torcuato", direccion: "Av. Ángel T. de Alvear 2555", lat: -34.4829, lon: -58.6251 },
+    { nombre: "Hurlingham", direccion: "Arturo Jauretche 1435", lat: -34.5887, lon: -58.6398 },
+    { nombre: "Cañuelas", direccion: "Av. Libertad 1200", lat: -35.0586, lon: -58.7474 },
+    { nombre: "San Martín", direccion: "Sarmiento 1887", lat: -34.5725, lon: -58.5386 },
+    { nombre: "Parque Leloir", direccion: "Av. Martín Fierro 3246", lat: -34.6573, lon: -58.6872 },
+    { nombre: "Munro", direccion: "Av. Vélez Sarsfield 4898", lat: -34.5221, lon: -58.5259 },
+    { nombre: "Merlo", direccion: "Avellaneda 598", lat: -34.6691, lon: -58.7274 },
+    { nombre: "Banfield", direccion: "Vieytes 211", lat: -34.7447, lon: -58.3897 }
+];
+
+// Función para obtener coordenadas usando API pública Nominatim (sin clave)
+async function obtenerCoordenadas(localidad) {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(localidad + ", Buenos Aires, Argentina")}`;
+    const response = await fetch(url);
+    const data = await response.json();
+    if (data.length === 0) return null;
+    return {
+        lat: parseFloat(data[0].lat),
+        lon: parseFloat(data[0].lon)
+    };
+}
+
+// Distancia Haversine
+function distancia(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) *
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+async function buscarCentro() {
+    const loc = document.getElementById("localidad").value.trim();
+    const resultado = document.getElementById("resultado");
+
+    if (!loc) {
+        resultado.innerHTML = "Escribí una localidad.";
+        return;
+    }
+
+    resultado.innerHTML = "Buscando...";
+
+    const coord = await obtenerCoordenadas(loc);
+    if (!coord) {
+        resultado.innerHTML = "No se encontró esa localidad.";
+        return;
+    }
+
+    let mejorCentro = null;
+    let mejorDistancia = Infinity;
+
+    centros.forEach(c => {
+        const d = distancia(coord.lat, coord.lon, c.lat, c.lon);
+        if (d < mejorDistancia) {
+            mejorDistancia = d;
+            mejorCentro = c;
+        }
+    });
+
+    resultado.innerHTML = `
+        📍 <b>Centro más cercano:</b><br>
+        <b>${mejorCentro.nombre}</b><br>
+        ${mejorCentro.direccion}<br><br>
+        Distancia aproximada: ${mejorDistancia.toFixed(1)} km
+    `;
+}
+</script>
+
 </body>
 </html>
