@@ -1,172 +1,356 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Buscador de Centros</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Buscador de Centros Siglo 21</title>
 
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f4f4f4;
-            padding: 20px;
-        }
-        .container {
-            max-width: 650px;
-            margin: auto;
-            background: white;
-            padding: 25px;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-        input, button {
-            width: 100%;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            border: 1px solid #ccc;
-        }
-        button {
-            background: #0c3b2e;
-            color: white;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        button:hover {
-            background: #105c47;
-        }
-        #resultado {
-            margin-top: 20px;
-            opacity: 0;
-            transition: opacity .3s ease;
-        }
-        #resultado.show {
-            opacity: 1;
-        }
-        #mapa {
-            width: 100%;
-            height: 300px;
-            margin-top: 15px;
-            border-radius: 12px;
-        }
-    </style>
+  <style>
+    :root { --verde:#0c3b2e; --verde-dark:#0a3a2a; }
+    body { font-family: Arial, Helvetica, sans-serif; margin:0; background:#f4f6f7; color:#111 }
+    header { background:var(--verde); color:#fff; padding:18px; text-align:center; font-weight:700 }
+    .wrap { max-width:1100px; margin:20px auto; padding:16px; }
+    .card { background:#fff; border-radius:10px; padding:16px; box-shadow:0 6px 18px rgba(0,0,0,.06) }
+    .controls { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px }
+    input[type="text"] { flex:1; padding:10px 12px; border-radius:8px; border:1px solid #d0d7d5; font-size:15px }
+    button { background:var(--verde); color:#fff; border:none; padding:10px 14px; border-radius:8px; cursor:pointer }
+    button:hover { background:var(--verde-dark) }
+    #info { margin-top:12px }
+    #map { height:420px; border-radius:8px; margin-top:12px }
+    .result-block { margin-top:12px; display:flex; gap:12px; flex-wrap:wrap }
+    .res { flex:1; min-width:220px; background:#fbfffb; border-left:6px solid var(--verde); padding:10px; border-radius:8px }
+    .small { font-size:13px; color:#555 }
+    .notice { margin-top:10px; font-size:13px; color:#666 }
+    @media(max-width:720px){ .controls{flex-direction:column} }
+  </style>
 
-    <!-- Leaflet -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 </head>
-
 <body>
+  <header>Buscador de Centros Siglo 21</header>
 
-<div class="container">
-    <h2>Buscador de Centros Teclab</h2>
+  <div class="wrap">
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap">
+        <div style="flex:1">
+          <div class="controls">
+            <input id="localidad" type="text" placeholder="Ingresá localidad (ej: Virrey del Pino)" />
+            <button id="buscarBtn">Buscar</button>
+            <button id="limpiarBtn" style="background:#777">Limpiar</button>
+          </div>
+          <div id="info" class="small">Pega tu <b>ORS API Key</b> (opcional) abajo para distancias por ruta reales. Si no, usará Haversine (línea recta).</div>
+          <div style="margin-top:8px">
+            <input id="orsKey" type="text" placeholder="Tu ORS API Key (opcional) — p.ej. 5f... (obtenela en openrouteservice.org)" style="width:100%; padding:8px; border-radius:6px; border:1px solid #ddd" />
+            <div class="notice">Si pegás la clave ORS, el sistema usará la <b>Distance / Directions</b> de OpenRouteService para distancias y rutas reales.</div>
+          </div>
+        </div>
+      </div>
 
-    <input id="localidad" placeholder="Ingresá tu localidad (ej: Virrey del Pino)">
-    <button onclick="buscar()">Buscar centro 📍</button>
+      <div id="resultsArea" style="margin-top:14px">
+        <div class="result-block" id="resultsBlock" style="display:none">
+          <div class="res" id="firstRes"></div>
+          <div class="res" id="secondRes"></div>
+        </div>
+      </div>
 
-    <div id="resultado"></div>
-    <div id="mapa"></div>
-</div>
+      <div id="map" class="card" style="margin-top:14px"></div>
+    </div>
+  </div>
 
 <script>
+/* ============================
+   CONFIG: pega tu ORS API KEY aquí o en el input visible
+   ============================ */
+let ORS_API_KEY = ""; // si la pegás aquí se usa. También podés pegarla en el input ORS Key en la UI.
 
-    /* Coordenadas REALES de localidades específicas */
-    const localidades = {
-        "virrey del pino": { lat: -34.8137, lon: -58.6814 },
-        "la matanza": { lat: -34.7714, lon: -58.6241 },
-        "gonzález catán": { lat: -34.7875, lon: -58.6253 },
-        "isidro casanova": { lat: -34.6995, lon: -58.5861 },
-        "cañuelas": { lat: -35.0526, lon: -58.7401 },
-        "merlo": { lat: -34.6654, lon: -58.7276 }
-    };
+/* ============================
+   TUS CENTROS (direcciones tal como las diste)
+   - Voy a geocodificar estas direcciones con Nominatim al cargar
+   - Si preferís, podés reemplazar por coordenadas ya conocidas
+   ============================ */
+const centrosInfo = [
+  { id:"san_miguel", label:"Cau San Miguel", address:"Universidad Siglo 21, San Miguel, Av. León Gallardo 207, B1662CGZ Muñiz, Provincia de Buenos Aires" },
+  { id:"don_torcuato", label:"Cau Don Torcuato", address:"Av. Ángel T. de Alvear 2555, B1611 Don Torcuato, Provincia de Buenos Aires" },
+  { id:"hurlingham", label:"Cau Hurlingham", address:"Arturo Jauretche 1435, B1686FDE Hurlingham, Provincia de Buenos Aires" },
+  { id:"canyuelas", label:"Cau Cañuelas", address:"C. Libertad 1200 B1814FHK, B1814FHK Cañuelas, Provincia de Buenos Aires" },
+  { id:"san_martin", label:"Cau San Martin", address:"Sarmiento 1887, B1650 San Martín, Provincia de Buenos Aires" },
+  { id:"parque_leloir", label:"Cau Parque Leloir", address:"Martín Fierro 3246 Piso 1, Oficina 108, B1715BRH Villa Udaondo, Provincia de Buenos Aires" },
+  { id:"munro", label:"Cau Munro", address:"Vélez Sársfield 4898, B1605 Munro, Provincia de Buenos Aires" },
+  { id:"merlo", label:"Cau Merlo", address:"Avellaneda 673, B1722EPI Merlo, Provincia de Buenos Aires" },
+  { id:"banfield", label:"Cau Banfield", address:"Vieytes 211, B1828 Banfield, Provincia de Buenos Aires" }
+];
 
-    /* TUS CENTROS REALES */
-    const centros = [
-        { nombre: "San Miguel", lat: -34.54313, lon: -58.71267, direccion: "Av. Leon Gallardo 207" },
-        { nombre: "Don Torcuato", lat: -34.47175, lon: -58.63324, direccion: "Av Angel T de Alvear 2555" },
-        { nombre: "Hurlingham", lat: -34.58626, lon: -58.63928, direccion: "Arturo Jauretche 1435" },
-        { nombre: "Cañuelas", lat: -35.0526, lon: -58.7541, direccion: "Av. Libertad 1200" },
-        { nombre: "San Martín", lat: -34.56873, lon: -58.5416, direccion: "Sarmiento 1887" },
-        { nombre: "Parque Leloir", lat: -34.6331, lon: -58.6876, direccion: "Av Martin Fierro 3246" },
-        { nombre: "Munro", lat: -34.5305, lon: -58.5219, direccion: "Av Velez Sarsfield 4898" },
-        { nombre: "Merlo", lat: -34.6693, lon: -58.7291, direccion: "Avellaneda 598" },
-        { nombre: "Banfield", lat: -34.74188, lon: -58.39118, direccion: "Vieytes 211" }
-    ];
+/* ============================
+   MAPA (Leaflet)
+   ============================ */
+const map = L.map('map',{ preferCanvas:true }).setView([-34.65, -58.5], 10);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ maxZoom:19 }).addTo(map);
 
-    // Haversine
-    function haversine(lat1, lon1, lat2, lon2) {
-        const R = 6371;
-        const dLat = (lat2 - lat1) * Math.PI / 180;
-        const dLon = (lon2 - lon1) * Math.PI / 180;
+let userMarker = null;
+let centerMarkers = [];
+let routeLayers = [];
 
-        const a = Math.sin(dLat/2)**2 +
-                  Math.cos(lat1 * Math.PI/180) *
-                  Math.cos(lat2 * Math.PI/180) *
-                  Math.sin(dLon/2)**2;
+/* ============================
+   UTIL: Haversine (fallback)
+   ============================ */
+function haversineKm(lat1, lon1, lat2, lon2){
+  const R = 6371;
+  const dLat = (lat2-lat1) * Math.PI/180;
+  const dLon = (lon2-lon1) * Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
 
-        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+/* ============================
+   Geocodificar centros (Nominatim) — ocurre una vez al inicio
+   ============================ */
+async function geocodeAddress(address){
+  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&addressdetails=0`;
+  const res = await fetch(url,{ headers:{ 'Accept-Language':'es' }});
+  const j = await res.json();
+  if (!j || j.length === 0) return null;
+  return { lat: parseFloat(j[0].lat), lon: parseFloat(j[0].lon) };
+}
+
+async function geocodeAllCenters(){
+  // intenta geocodificar cada centro y guardar coords
+  for (let c of centrosInfo){
+    try {
+      const g = await geocodeAddress(c.address);
+      if (g) { c.lat = g.lat; c.lon = g.lon; }
+      else { console.warn("No geocode:", c.label, c.address); }
+      // pequeño delay para no saturar Nominatim
+      await new Promise(r => setTimeout(r, 500));
+    } catch(e){ console.error(e); }
+  }
+  console.log("Centros geocodificados:", centrosInfo);
+  // opcional: agregar marcadores de centros en el mapa (desactivado por default)
+  // centrosInfo.forEach(c => {
+  //   if (c.lat) L.circleMarker([c.lat,c.lon],{radius:5,color:'#0c3b2e'}).addTo(map).bindPopup(c.label);
+  // });
+}
+
+/* ============================
+   Helper: show results on UI
+   ============================ */
+function showResults(first, second){
+  document.getElementById('resultsBlock').style.display = 'flex';
+  document.getElementById('firstRes').innerHTML = `<b>${first.label}</b><br>${first.address}<br><span class="small">Distancia por ruta: ${ (first.distance_km || first.distance).toFixed(2) } km</span>`;
+  if (second){
+    document.getElementById('secondRes').innerHTML = `<b>${second.label}</b><br>${second.address}<br><span class="small">Distancia por ruta: ${ (second.distance_km || second.distance).toFixed(2) } km</span>`;
+  } else {
+    document.getElementById('secondRes').innerHTML = '';
+  }
+}
+
+/* ============================
+   Limpia marcadores y rutas
+   ============================ */
+function clearMapGraphics(){
+  if (userMarker) { userMarker.remove(); userMarker = null; }
+  centerMarkers.forEach(m=>m.remove()); centerMarkers = [];
+  routeLayers.forEach(l=>map.removeLayer(l)); routeLayers = [];
+}
+
+/* ============================
+   ORS Matrix (mejor: 1 request para todas las distancias)
+   ============================ */
+async function getRouteDistancesORS(userCoord, centersCoords, apiKey){
+  // construye locations en formato [lon,lat]
+  const locations = [ [userCoord.lon, userCoord.lat], ...centersCoords.map(c => [c.lon, c.lat]) ];
+  const body = {
+    locations: locations,
+    metrics: ["distance"], // distance en metros
+    units: "m"
+  };
+  const res = await fetch('https://api.openrouteservice.org/v2/matrix/driving-car', {
+    method: 'POST',
+    headers: {
+      'Content-Type':'application/json',
+      'Authorization': apiKey
+    },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`ORS matrix error: ${res.status} ${txt}`);
+  }
+  const j = await res.json();
+  // j.distances is a matrix distances[i][j] in meters
+  // we want distances from row 0 (user) to each center (columns 1..n)
+  const distsMeters = j.distances[0].slice(1);
+  return distsMeters.map(m => (m==null ? null : m/1000)); // km
+}
+
+/* ============================
+   ORS Directions para trazar ruta (geojson)
+   ============================ */
+async function getRouteGeoJSONORS(from, to, apiKey){
+  const url = 'https://api.openrouteservice.org/v2/directions/driving-car/geojson';
+  const body = { coordinates: [ [from.lon, from.lat], [to.lon, to.lat] ] };
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type':'application/json', 'Authorization': apiKey },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`ORS directions error: ${res.status} ${txt}`);
+  }
+  const j = await res.json();
+  return j; // geojson FeatureCollection with geometry
+}
+
+/* ============================
+   Principal: buscar y mostrar 2 centros + map routes
+   ============================ */
+async function handleSearch(){
+  // actualizar ORS key desde input si usuario la pegó
+  const inputKey = document.getElementById('orsKey').value.trim();
+  if (inputKey) ORS_API_KEY = inputKey;
+
+  const q = document.getElementById('localidad').value.trim();
+  if (!q) { alert('Ingresá una localidad'); return; }
+
+  // 1) geocode user via Nominatim
+  let geoUser = null;
+  try {
+    const g = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q + ' Buenos Aires Argentina')}&limit=1`, { headers:{ 'Accept-Language':'es' }});
+    const j = await g.json();
+    if (!j || j.length === 0) {
+      alert('No se encontró la localidad. Probá con otra forma de escribirla.');
+      return;
     }
+    geoUser = { lat: parseFloat(j[0].lat), lon: parseFloat(j[0].lon), display_name: j[0].display_name };
+  } catch(e){
+    alert('Error al geocodificar la localidad: ' + e.message);
+    return;
+  }
 
-    // Mapa
-    const mapa = L.map("mapa").setView([-34.70, -58.60], 9);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(mapa);
+  // 2) asegurarnos que centros tienen lat/lon (ya geocodificados al cargar)
+  const centersCoords = centrosInfo.filter(c => c.lat && c.lon);
+  if (centersCoords.length !== centrosInfo.length){
+    alert('Aún no están listas las coordenadas de los centros. Recargá la página en 10s y probá de nuevo.');
+    return;
+  }
 
-    let marcadorUsuario = null;
-    let marcadores = [];
+  clearMapGraphics();
 
-    function buscar() {
-        const userInput = document.getElementById("localidad").value.trim().toLowerCase();
-
-        if (!localidades[userInput]) {
-            alert("Localidad no encontrada. Ingresá una zona válida.");
-            return;
-        }
-
-        const user = localidades[userInput];
-
-        // Distancias a TUS centros
-        const distancias = centros.map(c => ({
-            ...c,
-            dist: haversine(user.lat, user.lon, c.lat, c.lon)
-        }));
-
-        // Ordenar del más cercano al más lejano
-        distancias.sort((a, b) => a.dist - b.dist);
-
-        const primero = distancias[0];
-        const segundo = distancias[1];
-
-        // Mostrar info
-        const box = document.getElementById("resultado");
-        box.innerHTML = `
-            <h3>Centro más cercano:</h3>
-            <p><b>${primero.nombre}</b><br>
-            Dirección: ${primero.direccion}<br>
-            Distancia: ${primero.dist.toFixed(2)} km</p>
-
-            <h3>Segundo centro más cercano:</h3>
-            <p><b>${segundo.nombre}</b><br>
-            Dirección: ${segundo.direccion}<br>
-            Distancia: ${segundo.dist.toFixed(2)} km</p>
-        `;
-        box.classList.add("show");
-
-        // Limpiar marcadores
-        if (marcadorUsuario) marcadorUsuario.remove();
-        marcadores.forEach(m => m.remove());
-        marcadores = [];
-
-        marcadorUsuario = L.marker([user.lat, user.lon]).addTo(mapa).bindPopup("📍 Tu ubicación");
-        mapa.setView([user.lat, user.lon], 10);
-
-        [primero, segundo].forEach(c => {
-            const mk = L.marker([c.lat, c.lon])
-                .addTo(mapa)
-                .bindPopup(`<b>${c.nombre}</b><br>${c.direccion}<br>${c.dist.toFixed(1)} km`);
-            marcadores.push(mk);
-        });
+  // 3) si ORS key presente -> usar matrix para obtener distancias por ruta real
+  let distancesKm = [];
+  let usedORS = false;
+  if (ORS_API_KEY){
+    try {
+      distancesKm = await getRouteDistancesORS(geoUser, centersCoords, ORS_API_KEY);
+      usedORS = true;
+    } catch(err){
+      console.warn('ORS matrix falló:', err.message);
+      // fallback a Haversine si matrix falla
+      distancesKm = centersCoords.map(c => haversineKm(geoUser.lat, geoUser.lon, c.lat, c.lon));
+      usedORS = false;
     }
+  } else {
+    // no key -> fallback Haversine
+    distancesKm = centersCoords.map(c => haversineKm(geoUser.lat, geoUser.lon, c.lat, c.lon));
+    usedORS = false;
+  }
+
+  // 4) unir distancias con info de centros y ordenar
+  const list = centersCoords.map((c, i) => ({
+    id: c.id,
+    label: c.label,
+    address: c.address,
+    lat: c.lat,
+    lon: c.lon,
+    distance: distancesKm[i],
+    distance_km: distancesKm[i]
+  }));
+  list.sort((a,b) => (a.distance || 1e9) - (b.distance || 1e9));
+
+  const first = list[0];
+  const second = list[1];
+
+  // 5) mostrar texto
+  showResults(first, second);
+
+  // 6) dibujar en mapa: marcador usuario y rutas a primero y segundo
+  userMarker = L.marker([geoUser.lat, geoUser.lon], { icon: L.icon({ iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png', iconAnchor:[12,41] }) })
+    .addTo(map)
+    .bindPopup(`<b>Localidad:</b> ${q}`).openPopup();
+
+  // marcador centros
+  const mk1 = L.marker([first.lat, first.lon], { icon: L.icon({ iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png' }) })
+    .addTo(map).bindPopup(`<b>${first.label}</b><br>${first.address}<br>${(first.distance_km||first.distance).toFixed(2)} km`);
+  centerMarkers.push(mk1);
+  if (second) {
+    const mk2 = L.marker([second.lat, second.lon], { icon: L.icon({ iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png' }) })
+      .addTo(map).bindPopup(`<b>${second.label}</b><br>${second.address}<br>${(second.distance_km||second.distance).toFixed(2)} km`);
+    centerMarkers.push(mk2);
+  }
+
+  // 7) rutas: si usamos ORS -> pedir directions para 1 y 2 y trazar
+  if (usedORS && ORS_API_KEY){
+    try {
+      const route1 = await getRouteGeoJSONORS({lat:geoUser.lat, lon:geoUser.lon}, {lat:first.lat, lon:first.lon}, ORS_API_KEY);
+      const layer1 = L.geoJSON(route1, { style:{ color:'#0c3b2e', weight:5, opacity:0.85 } }).addTo(map);
+      routeLayers.push(layer1);
+
+      if (second) {
+        const route2 = await getRouteGeoJSONORS({lat:geoUser.lat, lon:geoUser.lon}, {lat:second.lat, lon:second.lon}, ORS_API_KEY);
+        const layer2 = L.geoJSON(route2, { style:{ color:'#1f7fb0', weight:4, opacity:0.85 } }).addTo(map);
+        routeLayers.push(layer2);
+      }
+    } catch(e){
+      console.warn('Error al trazar rutas ORS:', e.message);
+      // si falla, dibujamos líneas rectas como fallback
+      const l1 = L.polyline([[geoUser.lat,geoUser.lon],[first.lat,first.lon]], {color:'#0c3b2e', weight:3, dashArray:'6 6'}).addTo(map);
+      routeLayers.push(l1);
+      if (second) {
+        const l2 = L.polyline([[geoUser.lat,geoUser.lon],[second.lat,second.lon]], {color:'#1f7fb0', weight:3, dashArray:'6 6'}).addTo(map);
+        routeLayers.push(l2);
+      }
+    }
+  } else {
+    // sin ORS: dibujar líneas rectas (fallback)
+    const l1 = L.polyline([[geoUser.lat,geoUser.lon],[first.lat,first.lon]], {color:'#0c3b2e', weight:3, dashArray:'6 6'}).addTo(map);
+    routeLayers.push(l1);
+    if (second) {
+      const l2 = L.polyline([[geoUser.lat,geoUser.lon],[second.lat,second.lon]], {color:'#1f7fb0', weight:3, dashArray:'6 6'}).addTo(map);
+      routeLayers.push(l2);
+    }
+  }
+
+  // ajustar vista para mostrar todo
+  const bounds = L.latLngBounds([[geoUser.lat,geoUser.lon],[first.lat,first.lon]]);
+  if (second) bounds.extend([second.lat, second.lon]);
+  map.fitBounds(bounds.pad(0.25));
+}
+
+/* ============================
+   Inicialización
+   ============================ */
+(async function init(){
+  // intentar leer key desde input si el desarrollador la pegó arriba del script
+  const presetKey = ORS_API_KEY;
+  if (presetKey) document.getElementById('orsKey').value = presetKey;
+
+  // geocodificar centros (usa Nominatim) — esto tarda unos segundos (9 centros)
+  await geocodeAllCenters();
+})();
+
+/* ============================
+   Eventos UI
+   ============================ */
+document.getElementById('buscarBtn').addEventListener('click', handleSearch);
+document.getElementById('limpiarBtn').addEventListener('click', ()=>{
+  document.getElementById('localidad').value = '';
+  clearMapGraphics();
+  document.getElementById('resultsBlock').style.display = 'none';
+});
+document.getElementById('localidad').addEventListener('keypress', e => { if (e.key === 'Enter') handleSearch(); });
+
 </script>
-
 </body>
 </html>
