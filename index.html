@@ -1,152 +1,267 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Buscador de Centros Siglo 21</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Buscador de Centros Siglo 21</title>
 
-  <style>
-    :root { --verde:#0c3b2e; --verde-dark:#0a3a2a; }
-    body { font-family: Arial, Helvetica, sans-serif; margin:0; background:#f4f6f7; color:#111 }
-    header { background:var(--verde); color:#fff; padding:18px; text-align:center; font-weight:700 }
-    .wrap { max-width:1100px; margin:20px auto; padding:16px; }
-    .card { background:#fff; border-radius:10px; padding:16px; box-shadow:0 6px 18px rgba(0,0,0,.06) }
-    .controls { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px }
-    input[type="text"] { flex:1; padding:10px 12px; border-radius:8px; border:1px solid #d0d7d5; font-size:15px }
-    button { background:var(--verde); color:#fff; border:none; padding:10px 14px; border-radius:8px; cursor:pointer }
-    button:hover { background:var(--verde-dark) }
-    #info { margin-top:12px }
-    #map { height:420px; border-radius:8px; margin-top:12px }
-    .result-block { margin:10px 0; }
-    .res { background:#fbfffb; border-left:6px solid var(--verde); padding:10px; border-radius:8px; margin-bottom:10px }
-    .small { font-size:13px; color:#555 }
-    @media(max-width:720px){ .controls{flex-direction:column} }
-  </style>
+<!-- Styles: mezcla Landing (visual) + Corporativo Siglo21 -->
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --verde:#0c3b2e;
+    --verde-2:#105c47;
+    --bg:#f6f7f8;
+    --card:#ffffff;
+    --muted:#6b7280;
+    --accent:#1f7fb0;
+    --radius:12px;
+  }
+  *{box-sizing:border-box}
+  body{
+    font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    margin:0; background:var(--bg); color:#0b1220;
+    -webkit-font-smoothing:antialiased;
+  }
 
-  <!-- Leaflet -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  /* Header / Hero */
+  header{
+    background:linear-gradient(90deg,var(--verde) 0%, var(--verde-2) 100%);
+    color:white; padding:20px 18px; display:flex; align-items:center; gap:16px;
+  }
+  header img{height:40px}
+  header h1{font-size:18px; margin:0; font-weight:700}
+
+  .container{max-width:1100px; margin:22px auto; padding:0 18px}
+
+  .hero{
+    display:grid; grid-template-columns: 1fr 420px; gap:24px; align-items:start;
+  }
+  @media(max-width:980px){ .hero{grid-template-columns:1fr} }
+
+  .panel{
+    background:var(--card); border-radius:var(--radius); padding:22px; box-shadow:0 8px 28px rgba(12,19,24,0.06);
+  }
+
+  .title{
+    margin:0 0 10px 0; color:var(--verde); font-size:22px; font-weight:700;
+  }
+  .lead{color:var(--muted); margin:0 0 18px 0}
+
+  /* Search */
+  .searchRow{display:flex; gap:10px; align-items:center}
+  .searchRow input{
+    flex:1; padding:12px 14px; border-radius:10px; border:1px solid #e6e9ea; font-size:15px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.6)
+  }
+  .searchRow button{
+    background:var(--verde); color:white; border:none; padding:12px 16px; border-radius:10px; cursor:pointer;
+    font-weight:600; box-shadow:0 6px 18px rgba(12,19,24,0.08);
+  }
+  .searchRow button:hover{background:var(--verde-2)}
+
+  .small{font-size:13px;color:var(--muted); margin-top:10px}
+
+  /* Results area */
+  .results{
+    margin-top:16px; display:flex; gap:12px; align-items:stretch; flex-wrap:wrap;
+  }
+  .cardRes{
+    background:linear-gradient(180deg,#fff,#fbfffb); border-radius:10px; padding:14px; min-width:250px;
+    box-shadow:0 6px 18px rgba(12,19,24,0.04); border-left:6px solid var(--verde); flex:1;
+    transform:translateY(10px); opacity:0; transition: all .4s ease;
+  }
+  .cardRes.visible{transform:translateY(0); opacity:1}
+  .cardRes h4{margin:0 0 8px 0; font-size:16px; color:#062a20}
+  .muted{color:var(--muted); font-size:13px}
+
+  /* Map */
+  #map{height:420px; border-radius:10px; margin-top:18px; border:1px solid #e9eef0; overflow:hidden}
+
+  /* Footer small */
+  .meta{margin-top:12px; color:var(--muted); font-size:13px}
+</style>
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 </head>
 <body>
-  <header>Buscador de Centros Siglo 21</header>
 
-  <div class="wrap">
-    <div class="card">
-      <div class="controls">
-        <input id="localidad" type="text" placeholder="Ingresá tu localidad (ej: Virrey del Pino)" />
+<header>
+  <!-- Puedes reemplazar logo src con el logo oficial si querés -->
+  <img src="https://www.universidadsiglo21.edu.ar/themes/custom/us21/logo.svg" alt="Siglo 21 logo" onerror="this.style.display='none'"/>
+  <h1>Buscador de Centros Siglo 21</h1>
+</header>
+
+<div class="container">
+  <div class="hero">
+    <!-- Left: info + search -->
+    <div class="panel">
+      <p class="title">Encontrá el centro más cercano en segundos</p>
+      <p class="lead">Escribí la localidad, apretá <strong>ENTER</strong> o el botón y te muestro los <strong>2 centros</strong> más cercanos con mapa interactivo.</p>
+
+      <div class="searchRow" style="margin-top:6px">
+        <input id="localidad" type="text" placeholder="Ej: Virrey del Pino — escribí y apreta ENTER" aria-label="Localidad" />
         <button id="buscarBtn">Buscar</button>
       </div>
-      <div id="resultsArea">
-        <div class="result-block" id="resultsBlock" style="display:none">
-          <div class="res" id="firstRes"></div>
-          <div class="res" id="secondRes"></div>
-        </div>
+
+      <div class="small">SISTEMA: mapas libres (OpenStreetMap) + Leaflet. No se usa API Key.</div>
+
+      <div id="results" class="results" aria-live="polite" style="margin-top:18px">
+        <div id="firstCard" class="cardRes" role="status"></div>
+        <div id="secondCard" class="cardRes" role="status"></div>
       </div>
+
+      <div class="meta">Consejo: mejor que los asesores escriban la localidad sin abreviaturas (ej: "Virrey del Pino").</div>
+    </div>
+
+    <!-- Right: Map -->
+    <div class="panel" style="padding:12px">
       <div id="map"></div>
     </div>
   </div>
+</div>
 
 <script>
-  // Coordenadas fijas de tus centros
-  const centros = [
-    { label:"Cau San Miguel", lat: -34.54313, lon: -58.71267, address:"Av. León Gallardo 207, San Miguel" },
-    { label:"Cau Don Torcuato", lat: -34.47175, lon: -58.63324, address:"Av. Ángel T. de Alvear 2555, Don Torcuato" },
-    { label:"Cau Hurlingham", lat: -34.58626, lon: -58.63928, address:"Arturo Jauretche 1435, Hurlingham" },
-    { label:"Cau Cañuelas", lat: -35.0526,  lon: -58.7541,  address:"Av. Libertad 1200, Cañuelas" },
-    { label:"Cau San Martín", lat: -34.56873, lon: -58.5416,  address:"Sarmiento 1887, San Martín" },
-    { label:"Cau Parque Leloir", lat: -34.63310, lon: -58.68760, address:"Av. Martín Fierro 3246, Parque Leloir" },
-    { label:"Cau Munro", lat: -34.53050, lon: -58.52190, address:"Vélez Sársfield 4898, Munro" },
-    { label:"Cau Merlo", lat: -34.66930, lon: -58.72910, address:"Avellaneda 673, Merlo" },
-    { label:"Cau Banfield", lat: -34.74188, lon: -58.39118, address:"Vieytes 211, Banfield" }
-  ];
+/* ======================
+   CENTROS: coordenadas fijas (las tuyas)
+   ====================== */
+const CENTROS = [
+  { id:'san_miguel', label:'Cau San Miguel', lat:-34.54313, lon:-58.71267, addr:'Av. León Gallardo 207, Muñiz' },
+  { id:'don_torcuato', label:'Cau Don Torcuato', lat:-34.47175, lon:-58.63324, addr:'Av. Ángel T. de Alvear 2555' },
+  { id:'hurlingham', label:'Cau Hurlingham', lat:-34.58626, lon:-58.63928, addr:'Arturo Jauretche 1435' },
+  { id:'canuelas', label:'Cau Cañuelas', lat:-35.0526, lon:-58.7541, addr:'Av. Libertad 1200' },
+  { id:'san_martin', label:'Cau San Martín', lat:-34.56873, lon:-58.5416, addr:'Sarmiento 1887' },
+  { id:'parque_leloir', label:'Cau Parque Leloir', lat:-34.63310, lon:-58.68760, addr:'Av. Martín Fierro 3246' },
+  { id:'munro', label:'Cau Munro', lat:-34.53050, lon:-58.52190, addr:'Vélez Sársfield 4898' },
+  { id:'merlo', label:'Cau Merlo', lat:-34.66930, lon:-58.72910, addr:'Avellaneda 673' },
+  { id:'banfield', label:'Cau Banfield', lat:-34.74188, lon:-58.39118, addr:'Vieytes 211' }
+];
 
-  // Mapa
-  const map = L.map('map').setView([-34.65, -58.5], 10);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ maxZoom:19 }).addTo(map);
+/* ======================
+   Util: Haversine (km)
+   ====================== */
+function haversineKm(lat1, lon1, lat2, lon2){
+  const R = 6371;
+  const dLat = (lat2-lat1)*Math.PI/180;
+  const dLon = (lon2-lon1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
 
-  let userMarker = null;
-  let markers = [];
+/* ======================
+   MAP Init (Leaflet)
+   ====================== */
+const map = L.map('map', { preferCanvas:true }).setView([-34.65, -58.5], 10);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19 }).addTo(map);
 
-  function haversineKm(lat1, lon1, lat2, lon2) {
-    const R = 6371;
-    const dLat = (lat2-lat1)*Math.PI/180;
-    const dLon = (lon2-lon1)*Math.PI/180;
-    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+let userMarker = null;
+let centroMarkers = [];
+let lines = [];
+
+/* Render resultados en tarjetas y mapa */
+function renderResults(sortedList, userLat, userLon){
+  const first = sortedList[0];
+  const second = sortedList[1];
+
+  // tarjetas
+  const firstCard = document.getElementById('firstCard');
+  const secondCard = document.getElementById('secondCard');
+
+  firstCard.innerHTML = `<h4>${first.label}</h4>
+    <div class="muted">${first.addr}</div>
+    <div style="margin-top:8px"><strong>${first.distance.toFixed(2)} km</strong> (aprox.)</div>`;
+  firstCard.classList.add('visible');
+
+  if (second) {
+    secondCard.innerHTML = `<h4>${second.label}</h4>
+      <div class="muted">${second.addr}</div>
+      <div style="margin-top:8px"><strong>${second.distance.toFixed(2)} km</strong> (aprox.)</div>`;
+    secondCard.classList.add('visible');
+  } else {
+    secondCard.innerHTML = '';
+    secondCard.classList.remove('visible');
   }
 
-  async function buscar() {
-    const loc = document.getElementById("localidad").value.trim();
-    if (!loc) { alert("Ingresá una localidad"); return; }
+  // limpiar marcadores previos
+  if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
+  centroMarkers.forEach(m=>map.removeLayer(m)); centroMarkers = [];
+  lines.forEach(l=>map.removeLayer(l)); lines = [];
 
-    // Geocodificar SOLO la localidad ingresada (no requiere API key)
-    let lat, lon;
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(loc + ", Buenos Aires, Argentina")}&limit=1`,
-        { headers:{'Accept-Language':'es'} }
-      );
-      const js = await res.json();
-      if (!js || js.length === 0) {
-        alert("No se encontró la localidad. Revisá la ortografía.");
-        return;
-      }
-      lat = parseFloat(js[0].lat);
-      lon = parseFloat(js[0].lon);
-    } catch(e) {
-      alert("Error al geocodificar la localidad");
-      return;
-    }
+  // crear marcador usuario
+  userMarker = L.marker([userLat, userLon], {title:'Localidad buscada'}).addTo(map).bindPopup(`<b>Localidad</b>`);
 
-    // Calcular distancias
-    const lista = centros.map(c => ({
-      ...c,
-      dist: haversineKm(lat, lon, c.lat, c.lon)
-    }));
+  // marcar centros (primero y segundo)
+  [first, second].forEach((c, idx) => {
+    if (!c) return;
+    const m = L.marker([c.lat, c.lon], {title:c.label}).addTo(map)
+      .bindPopup(`<b>${c.label}</b><br>${c.addr}<br>${c.distance.toFixed(2)} km`);
+    centroMarkers.push(m);
 
-    lista.sort((a,b)=>a.dist - b.dist);
-
-    const primero = lista[0];
-    const segundo = lista[1];
-
-    // Mostrar resultados
-    document.getElementById("resultsBlock").style.display = 'flex';
-    document.getElementById("firstRes").innerHTML =
-      `<b>${primero.label}</b><br>${primero.address}<br>Distancia: ${primero.dist.toFixed(2)} km`;
-
-    document.getElementById("secondRes").innerHTML =
-      `<b>${segundo.label}</b><br>${segundo.address}<br>Distancia: ${segundo.dist.toFixed(2)} km`;
-
-    // Limpiar marcadores
-    if (userMarker) userMarker.remove();
-    markers.forEach(m=>m.remove());
-    markers = [];
-
-    // Marcar usuario
-    userMarker = L.marker([lat, lon])
-      .addTo(map)
-      .bindPopup(`Localidad: ${loc}`)
-      .openPopup();
-
-    // Marcar centros
-    [primero, segundo].forEach(c => {
-      const mk = L.marker([c.lat, c.lon])
-        .addTo(map)
-        .bindPopup(`${c.label}<br>${c.address}<br>${c.dist.toFixed(1)} km`);
-      markers.push(mk);
-    });
-
-    // Ajustar vista
-    const pts = [[lat, lon], [primero.lat, primero.lon], [segundo.lat, segundo.lon]];
-    map.fitBounds(pts, { padding:[50,50] });
-  }
-
-  document.getElementById("buscarBtn").addEventListener("click", buscar);
-  document.getElementById("localidad").addEventListener("keypress", e => {
-    if (e.key === "Enter") buscar();
+    // línea (directa) — estilo distinto para primero/segundo
+    const color = idx===0 ? '#0c3b2e' : '#1f7fb0';
+    const poly = L.polyline([[userLat, userLon],[c.lat, c.lon]], {color, weight:3, dashArray:'6 6'}).addTo(map);
+    lines.push(poly);
   });
 
-</script>
+  // ajustar vista para incluir todo
+  const bounds = L.latLngBounds([[userLat,userLon],[first.lat,first.lon]]);
+  if (second) bounds.extend([second.lat, second.lon]);
+  map.fitBounds(bounds.pad(0.25));
+}
 
+/* ======================
+   Geocode user (Nominatim) — no API key required
+   ====================== */
+async function geocodeLocalidad(q){
+  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q + ', Buenos Aires, Argentina')}&limit=1`;
+  const resp = await fetch(url, { headers:{ 'Accept-Language':'es' }});
+  if (!resp.ok) throw new Error('Error geocoding');
+  const j = await resp.json();
+  if (!j || j.length === 0) return null;
+  return { lat: parseFloat(j[0].lat), lon: parseFloat(j[0].lon), display_name: j[0].display_name };
+}
+
+/* ======================
+   Main search handler
+   ====================== */
+async function handleSearch(){
+  const q = document.getElementById('localidad').value.trim();
+  if (!q) { alert('Ingresá una localidad'); return; }
+
+  // geocode
+  let geo;
+  try {
+    geo = await geocodeLocalidad(q);
+    if (!geo) { alert('No se encontró la localidad. Probá con otra forma de escribirla.'); return; }
+  } catch(e){
+    alert('Error al geocodificar. Probá de nuevo.'); return;
+  }
+
+  // calcular distancias (Haversine fallback)
+  const lista = CENTROS.map(c => {
+    return {...c, distance: haversineKm(geo.lat, geo.lon, c.lat, c.lon) };
+  });
+
+  lista.sort((a,b)=>a.distance - b.distance);
+
+  // render
+  renderResults(lista, geo.lat, geo.lon);
+}
+
+/* ======================
+   UX: eventos
+   ====================== */
+document.getElementById('buscarBtn').addEventListener('click', handleSearch);
+document.getElementById('localidad').addEventListener('keypress', e => { if (e.key === 'Enter') handleSearch(); });
+
+/* ======================
+   Small accessibility focus: focus input on load
+   ====================== */
+window.addEventListener('load', ()=>{ setTimeout(()=>{ document.getElementById('localidad').focus(); }, 300); });
+
+</script>
 </body>
 </html>
