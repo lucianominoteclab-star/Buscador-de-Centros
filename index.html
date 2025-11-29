@@ -4,176 +4,168 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Buscador de Centros</title>
+
     <style>
         body {
             font-family: Arial, sans-serif;
-            background: #f3f4f6;
+            background: #f4f4f4;
             padding: 20px;
         }
-        .contenedor {
-            max-width: 600px;
+        .container {
+            max-width: 650px;
             margin: auto;
             background: white;
-            padding: 20px;
+            padding: 25px;
             border-radius: 12px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
-        h2 {
-            text-align: center;
-        }
-        input {
+        input, button {
             width: 100%;
             padding: 12px;
-            border: 1px solid #ccc;
             border-radius: 8px;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
         }
         button {
-            width: 100%;
-            padding: 12px;
-            background: #2563eb;
-            border: none;
-            border-radius: 8px;
+            background: #0c3b2e;
             color: white;
             cursor: pointer;
             font-size: 16px;
         }
         button:hover {
-            background: #1e3fa3;
+            background: #105c47;
         }
         #resultado {
             margin-top: 20px;
             opacity: 0;
-            transition: opacity .4s ease;
+            transition: opacity .3s ease;
         }
-        #resultado.visible {
+        #resultado.show {
             opacity: 1;
         }
         #mapa {
             width: 100%;
             height: 300px;
-            margin-top: 20px;
+            margin-top: 15px;
             border-radius: 12px;
         }
     </style>
 
-    <!-- Leaflet (mapas) -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 </head>
+
 <body>
 
-<div class="contenedor">
-    <h2>Buscador de Centros</h2>
-    <input type="text" id="localidad" placeholder="Ingresá tu localidad (ej: Virrey del Pino)">
-    <button id="buscar">Buscar centro 📍</button>
+<div class="container">
+    <h2>Buscador de Centros Teclab</h2>
+
+    <input id="localidad" placeholder="Ingresá tu localidad (ej: Virrey del Pino)">
+    <button onclick="buscar()">Buscar centro 📍</button>
 
     <div id="resultado"></div>
     <div id="mapa"></div>
 </div>
 
 <script>
-    // Localidades con coordenadas
+
+    /* Coordenadas REALES de localidades específicas */
     const localidades = {
         "virrey del pino": { lat: -34.8137, lon: -58.6814 },
-        "merlo": { lat: -34.6654, lon: -58.7276 },
-        "cañuelas": { lat: -35.0526, lon: -58.7401 }
-        // Agregá más localidades acá
+        "la matanza": { lat: -34.7714, lon: -58.6241 },
+        "gonzález catán": { lat: -34.7875, lon: -58.6253 },
+        "isidro casanova": { lat: -34.6995, lon: -58.5861 },
+        "cañuelas": { lat: -35.0526, lon: -58.7401 },
+        "merlo": { lat: -34.6654, lon: -58.7276 }
     };
 
-    // Centros Teclab
+    /* TUS CENTROS REALES */
     const centros = [
-        { nombre: "Merlo", direccion: "Avellaneda 598", lat: -34.6654, lon: -58.7276 },
-        { nombre: "Cañuelas", direccion: "Libertad 200", lat: -35.0526, lon: -58.7401 },
-        { nombre: "San Justo", direccion: "Arieta 3300", lat: -34.6764, lon: -58.5611 }
-        // Agregá más centros si querés
+        { nombre: "San Miguel", lat: -34.54313, lon: -58.71267, direccion: "Av. Leon Gallardo 207" },
+        { nombre: "Don Torcuato", lat: -34.47175, lon: -58.63324, direccion: "Av Angel T de Alvear 2555" },
+        { nombre: "Hurlingham", lat: -34.58626, lon: -58.63928, direccion: "Arturo Jauretche 1435" },
+        { nombre: "Cañuelas", lat: -35.0526, lon: -58.7541, direccion: "Av. Libertad 1200" },
+        { nombre: "San Martín", lat: -34.56873, lon: -58.5416, direccion: "Sarmiento 1887" },
+        { nombre: "Parque Leloir", lat: -34.6331, lon: -58.6876, direccion: "Av Martin Fierro 3246" },
+        { nombre: "Munro", lat: -34.5305, lon: -58.5219, direccion: "Av Velez Sarsfield 4898" },
+        { nombre: "Merlo", lat: -34.6693, lon: -58.7291, direccion: "Avellaneda 598" },
+        { nombre: "Banfield", lat: -34.74188, lon: -58.39118, direccion: "Vieytes 211" }
     ];
 
-    // Calcular distancia Haversine
+    // Haversine
     function haversine(lat1, lon1, lat2, lon2) {
         const R = 6371;
         const dLat = (lat2 - lat1) * Math.PI / 180;
         const dLon = (lon2 - lon1) * Math.PI / 180;
-        const a =
-            Math.sin(dLat / 2) ** 2 +
-            Math.cos(lat1 * Math.PI / 180) *
-            Math.cos(lat2 * Math.PI / 180) *
-            Math.sin(dLon / 2) ** 2;
 
-        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const a = Math.sin(dLat/2)**2 +
+                  Math.cos(lat1 * Math.PI/180) *
+                  Math.cos(lat2 * Math.PI/180) *
+                  Math.sin(dLon/2)**2;
+
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     }
 
-    // Crear mapa
-    const mapa = L.map('mapa').setView([-34.70, -58.60], 9);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19
-    }).addTo(mapa);
+    // Mapa
+    const mapa = L.map("mapa").setView([-34.70, -58.60], 9);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(mapa);
 
-    let marcadorUsuario;
-    let marcadoresCentros = [];
+    let marcadorUsuario = null;
+    let marcadores = [];
 
-    // Buscar centro
-    document.getElementById("buscar").addEventListener("click", () => {
-        const input = document.getElementById("localidad").value.trim().toLowerCase();
-        const datosUsuario = localidades[input];
+    function buscar() {
+        const userInput = document.getElementById("localidad").value.trim().toLowerCase();
 
-        if (!datosUsuario) {
-            alert("Localidad no encontrada");
+        if (!localidades[userInput]) {
+            alert("Localidad no encontrada. Ingresá una zona válida.");
             return;
         }
 
-        // Calcular distancias
+        const user = localidades[userInput];
+
+        // Distancias a TUS centros
         const distancias = centros.map(c => ({
-            nombre: c.nombre,
-            direccion: c.direccion,
-            lat: c.lat,
-            lon: c.lon,
-            distancia: haversine(datosUsuario.lat, datosUsuario.lon, c.lat, c.lon)
+            ...c,
+            dist: haversine(user.lat, user.lon, c.lat, c.lon)
         }));
 
-        // Ordenar
-        distancias.sort((a, b) => a.distancia - b.distancia);
+        // Ordenar del más cercano al más lejano
+        distancias.sort((a, b) => a.dist - b.dist);
 
         const primero = distancias[0];
         const segundo = distancias[1];
 
-        // Mostrar texto con animación
-        const res = document.getElementById("resultado");
-        res.innerHTML = `
+        // Mostrar info
+        const box = document.getElementById("resultado");
+        box.innerHTML = `
             <h3>Centro más cercano:</h3>
-            <p><strong>${primero.nombre}</strong><br>
+            <p><b>${primero.nombre}</b><br>
             Dirección: ${primero.direccion}<br>
-            Distancia aprox: ${primero.distancia.toFixed(2)} km</p>
-
-            <hr>
+            Distancia: ${primero.dist.toFixed(2)} km</p>
 
             <h3>Segundo centro más cercano:</h3>
-            <p><strong>${segundo.nombre}</strong><br>
+            <p><b>${segundo.nombre}</b><br>
             Dirección: ${segundo.direccion}<br>
-            Distancia aprox: ${segundo.distancia.toFixed(2)} km</p>
+            Distancia: ${segundo.dist.toFixed(2)} km</p>
         `;
-        res.classList.add("visible");
+        box.classList.add("show");
 
-        // Limpiar marcadores anteriores
+        // Limpiar marcadores
         if (marcadorUsuario) marcadorUsuario.remove();
-        marcadoresCentros.forEach(m => m.remove());
-        marcadoresCentros = [];
+        marcadores.forEach(m => m.remove());
+        marcadores = [];
 
-        // Marcar ubicación del usuario
-        marcadorUsuario = L.marker([datosUsuario.lat, datosUsuario.lon]).addTo(mapa)
-            .bindPopup("📍 Vos estás acá").openPopup();
+        marcadorUsuario = L.marker([user.lat, user.lon]).addTo(mapa).bindPopup("📍 Tu ubicación");
+        mapa.setView([user.lat, user.lon], 10);
 
-        // Marcar los 2 centros más cercanos
         [primero, segundo].forEach(c => {
-            const m = L.marker([c.lat, c.lon])
+            const mk = L.marker([c.lat, c.lon])
                 .addTo(mapa)
-                .bindPopup(`<b>${c.nombre}</b><br>${c.direccion}<br>${c.distancia.toFixed(1)} km`);
-            marcadoresCentros.push(m);
+                .bindPopup(`<b>${c.nombre}</b><br>${c.direccion}<br>${c.dist.toFixed(1)} km`);
+            marcadores.push(mk);
         });
-
-        // Mover mapa
-        mapa.setView([datosUsuario.lat, datosUsuario.lon], 10);
-    });
+    }
 </script>
 
 </body>
