@@ -104,7 +104,23 @@
 
 <script>
 
-  // LISTA DE CENTROS
+  /* -------------------------
+     COORDENADAS EXACTAS
+     ------------------------- */
+  const localidadesFijas = {
+    "virrey del pino": { lat: -34.8427, lon: -58.6633 },
+    "virrey del pino buenos aires": { lat: -34.8427, lon: -58.6633 },
+    "virrey del pino argentina": { lat: -34.8427, lon: -58.6633 },
+    "virrey del pino la matanza": { lat: -34.8427, lon: -58.6633 },
+
+    "cañuelas": { lat: -35.0526, lon: -58.7541 },
+    "san miguel": { lat: -34.54313, lon: -58.71267 },
+    "merlo": { lat: -34.6693, lon: -58.7291 }
+  };
+
+  /* -------------------------
+     CENTROS OFICIALES
+     ------------------------- */
   const centros = [
     { nombre: "San Miguel", direccion: "Av. Leon Gallardo 207", lat: -34.54313, lon: -58.71267 },
     { nombre: "Don Torcuato", direccion: "Av Angel T de Alvear 2555", lat: -34.47175, lon: -58.63324 },
@@ -117,61 +133,88 @@
     { nombre: "Banfield", direccion: "Vieytes 211", lat: -34.74188, lon: -58.39118 }
   ];
 
-  // FORMULA REAL: HAVERSINE
-  function distanciaHaversine(lat1, lon1, lat2, lon2) {
-    const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-
-    const a =
-      Math.sin(dLat/2)**2 +
-      Math.cos(lat1 * Math.PI/180) *
-      Math.cos(lat2 * Math.PI/180) *
-      Math.sin(dLon/2)**2;
-
-    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-  }
-
-  // BUSCADOR
+  /* -------------------------
+     FUNCIÓN PRINCIPAL
+     ------------------------- */
   function buscarCentro() {
-    const localidad = document.getElementById("localidad").value.trim();
+    let localidad = document.getElementById("localidad").value.trim().toLowerCase();
     if (!localidad) return;
 
+    const card = document.getElementById("resultado-card");
+
+    // 1️⃣ Si la localidad está en la base interna
+    if (localidadesFijas[localidad]) {
+      const { lat, lon } = localidadesFijas[localidad];
+      calcularCentroMasCercano(lat, lon);
+      return;
+    }
+
+    // 2️⃣ Si no está → buscar en OpenStreetMap
     fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${localidad} Buenos Aires Argentina`)
       .then(res => res.json())
       .then(data => {
-
-        const card = document.getElementById("resultado-card");
-
         if (data.length === 0) {
-          card.style.display = 'block';
-          setTimeout(() => { card.style.opacity = '1'; card.style.transform = 'translateY(0)'; }, 20);
-          document.getElementById("resultado").innerText = "No se encontró la localidad.";
+          mostrarError("No se encontró la localidad.");
           return;
         }
 
         const lat = parseFloat(data[0].lat);
         const lon = parseFloat(data[0].lon);
-
-        let centroCercano = null;
-        let menorDist = Infinity;
-
-        centros.forEach(c => {
-          const dist = distanciaHaversine(lat, lon, c.lat, c.lon);
-          if (dist < menorDist) {
-            menorDist = dist;
-            centroCercano = c;
-          }
-        });
-
-        card.style.display = 'block';
-        setTimeout(() => { card.style.opacity = '1'; card.style.transform = 'translateY(0)'; }, 20);
-
-        document.getElementById("resultado").innerHTML =
-          `<b>Centro más cercano:</b> ${centroCercano.nombre}<br>
-           <b>Dirección:</b> ${centroCercano.direccion}<br>
-           <b>Distancia aprox:</b> ${menorDist.toFixed(2)} km`;
+        calcularCentroMasCercano(lat, lon);
       });
+  }
+
+  /* -------------------------
+     ERROR
+     ------------------------- */
+  function mostrarError(mensaje) {
+    const card = document.getElementById("resultado-card");
+    card.style.display = 'block';
+    setTimeout(() => {
+      card.style.opacity = '1';
+      card.style.transform = 'translateY(0)';
+    }, 20);
+    document.getElementById("resultado").innerText = mensaje;
+  }
+
+  /* -------------------------
+     CÁLCULO HAVERSINE
+     ------------------------- */
+  function calcularCentroMasCercano(lat, lon) {
+
+    function haversine(lat1, lon1, lat2, lon2) {
+      const R = 6371; // km
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2)**2 +
+                Math.cos(lat1*Math.PI/180) *
+                Math.cos(lat2*Math.PI/180) *
+                Math.sin(dLon/2)**2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+    let centroCercano = null;
+    let menorDist = Infinity;
+
+    centros.forEach(c => {
+      const dist = haversine(lat, lon, c.lat, c.lon);
+      if (dist < menorDist) {
+        menorDist = dist;
+        centroCercano = c;
+      }
+    });
+
+    const card = document.getElementById("resultado-card");
+    card.style.display = 'block';
+    setTimeout(() => {
+      card.style.opacity = '1';
+      card.style.transform = 'translateY(0)';
+    }, 20);
+
+    document.getElementById("resultado").innerHTML =
+      `<b>Centro más cercano:</b><br>${centroCercano.nombre}<br>
+       <b>Dirección:</b> ${centroCercano.direccion}<br>
+       <b>Distancia aprox:</b> ${menorDist.toFixed(2)} km`;
   }
 
   // ENTER para buscar
@@ -179,12 +222,6 @@
     if (e.key === "Enter") buscarCentro();
   });
 
-</script>
-
-</body>
-</html>
-
-  });
 </script>
 
 </body>
