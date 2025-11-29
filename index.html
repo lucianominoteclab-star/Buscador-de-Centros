@@ -17,10 +17,9 @@
     button:hover { background:var(--verde-dark) }
     #info { margin-top:12px }
     #map { height:420px; border-radius:8px; margin-top:12px }
-    .result-block { margin-top:12px; display:flex; gap:12px; flex-wrap:wrap }
-    .res { flex:1; min-width:220px; background:#fbfffb; border-left:6px solid var(--verde); padding:10px; border-radius:8px }
+    .result-block { margin:10px 0; }
+    .res { background:#fbfffb; border-left:6px solid var(--verde); padding:10px; border-radius:8px; margin-bottom:10px }
     .small { font-size:13px; color:#555 }
-    .notice { margin-top:10px; font-size:13px; color:#666 }
     @media(max-width:720px){ .controls{flex-direction:column} }
   </style>
 
@@ -33,324 +32,121 @@
 
   <div class="wrap">
     <div class="card">
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap">
-        <div style="flex:1">
-          <div class="controls">
-            <input id="localidad" type="text" placeholder="Ingresá localidad (ej: Virrey del Pino)" />
-            <button id="buscarBtn">Buscar</button>
-            <button id="limpiarBtn" style="background:#777">Limpiar</button>
-          </div>
-          <div id="info" class="small">Pega tu <b>ORS API Key</b> (opcional) abajo para distancias por ruta reales. Si no, usará Haversine (línea recta).</div>
-          <div style="margin-top:8px">
-            <input id="orsKey" type="text" placeholder="Tu ORS API Key (opcional) — p.ej. 5f... (obtenela en openrouteservice.org)" style="width:100%; padding:8px; border-radius:6px; border:1px solid #ddd" />
-            <div class="notice">Si pegás la clave ORS, el sistema usará la <b>Distance / Directions</b> de OpenRouteService para distancias y rutas reales.</div>
-          </div>
-        </div>
+      <div class="controls">
+        <input id="localidad" type="text" placeholder="Ingresá tu localidad (ej: Virrey del Pino)" />
+        <button id="buscarBtn">Buscar</button>
       </div>
-
-      <div id="resultsArea" style="margin-top:14px">
+      <div id="resultsArea">
         <div class="result-block" id="resultsBlock" style="display:none">
           <div class="res" id="firstRes"></div>
           <div class="res" id="secondRes"></div>
         </div>
       </div>
-
-      <div id="map" class="card" style="margin-top:14px"></div>
+      <div id="map"></div>
     </div>
   </div>
 
 <script>
-/* ============================
-   CONFIG: pega tu ORS API KEY aquí o en el input visible
-   ============================ */
-let ORS_API_KEY = ""; // si la pegás aquí se usa. También podés pegarla en el input ORS Key en la UI.
+  // Coordenadas fijas de tus centros
+  const centros = [
+    { label:"Cau San Miguel", lat: -34.54313, lon: -58.71267, address:"Av. León Gallardo 207, San Miguel" },
+    { label:"Cau Don Torcuato", lat: -34.47175, lon: -58.63324, address:"Av. Ángel T. de Alvear 2555, Don Torcuato" },
+    { label:"Cau Hurlingham", lat: -34.58626, lon: -58.63928, address:"Arturo Jauretche 1435, Hurlingham" },
+    { label:"Cau Cañuelas", lat: -35.0526,  lon: -58.7541,  address:"Av. Libertad 1200, Cañuelas" },
+    { label:"Cau San Martín", lat: -34.56873, lon: -58.5416,  address:"Sarmiento 1887, San Martín" },
+    { label:"Cau Parque Leloir", lat: -34.63310, lon: -58.68760, address:"Av. Martín Fierro 3246, Parque Leloir" },
+    { label:"Cau Munro", lat: -34.53050, lon: -58.52190, address:"Vélez Sársfield 4898, Munro" },
+    { label:"Cau Merlo", lat: -34.66930, lon: -58.72910, address:"Avellaneda 673, Merlo" },
+    { label:"Cau Banfield", lat: -34.74188, lon: -58.39118, address:"Vieytes 211, Banfield" }
+  ];
 
-/* ============================
-   TUS CENTROS (direcciones tal como las diste)
-   - Voy a geocodificar estas direcciones con Nominatim al cargar
-   - Si preferís, podés reemplazar por coordenadas ya conocidas
-   ============================ */
-const centrosInfo = [
-  { id:"san_miguel", label:"Cau San Miguel", address:"Universidad Siglo 21, San Miguel, Av. León Gallardo 207, B1662CGZ Muñiz, Provincia de Buenos Aires" },
-  { id:"don_torcuato", label:"Cau Don Torcuato", address:"Av. Ángel T. de Alvear 2555, B1611 Don Torcuato, Provincia de Buenos Aires" },
-  { id:"hurlingham", label:"Cau Hurlingham", address:"Arturo Jauretche 1435, B1686FDE Hurlingham, Provincia de Buenos Aires" },
-  { id:"canyuelas", label:"Cau Cañuelas", address:"C. Libertad 1200 B1814FHK, B1814FHK Cañuelas, Provincia de Buenos Aires" },
-  { id:"san_martin", label:"Cau San Martin", address:"Sarmiento 1887, B1650 San Martín, Provincia de Buenos Aires" },
-  { id:"parque_leloir", label:"Cau Parque Leloir", address:"Martín Fierro 3246 Piso 1, Oficina 108, B1715BRH Villa Udaondo, Provincia de Buenos Aires" },
-  { id:"munro", label:"Cau Munro", address:"Vélez Sársfield 4898, B1605 Munro, Provincia de Buenos Aires" },
-  { id:"merlo", label:"Cau Merlo", address:"Avellaneda 673, B1722EPI Merlo, Provincia de Buenos Aires" },
-  { id:"banfield", label:"Cau Banfield", address:"Vieytes 211, B1828 Banfield, Provincia de Buenos Aires" }
-];
+  // Mapa
+  const map = L.map('map').setView([-34.65, -58.5], 10);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ maxZoom:19 }).addTo(map);
 
-/* ============================
-   MAPA (Leaflet)
-   ============================ */
-const map = L.map('map',{ preferCanvas:true }).setView([-34.65, -58.5], 10);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ maxZoom:19 }).addTo(map);
+  let userMarker = null;
+  let markers = [];
 
-let userMarker = null;
-let centerMarkers = [];
-let routeLayers = [];
+  function haversineKm(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2-lat1)*Math.PI/180;
+    const dLon = (lon2-lon1)*Math.PI/180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
 
-/* ============================
-   UTIL: Haversine (fallback)
-   ============================ */
-function haversineKm(lat1, lon1, lat2, lon2){
-  const R = 6371;
-  const dLat = (lat2-lat1) * Math.PI/180;
-  const dLon = (lon2-lon1) * Math.PI/180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
+  async function buscar() {
+    const loc = document.getElementById("localidad").value.trim();
+    if (!loc) { alert("Ingresá una localidad"); return; }
 
-/* ============================
-   Geocodificar centros (Nominatim) — ocurre una vez al inicio
-   ============================ */
-async function geocodeAddress(address){
-  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&addressdetails=0`;
-  const res = await fetch(url,{ headers:{ 'Accept-Language':'es' }});
-  const j = await res.json();
-  if (!j || j.length === 0) return null;
-  return { lat: parseFloat(j[0].lat), lon: parseFloat(j[0].lon) };
-}
-
-async function geocodeAllCenters(){
-  // intenta geocodificar cada centro y guardar coords
-  for (let c of centrosInfo){
+    // Geocodificar SOLO la localidad ingresada (no requiere API key)
+    let lat, lon;
     try {
-      const g = await geocodeAddress(c.address);
-      if (g) { c.lat = g.lat; c.lon = g.lon; }
-      else { console.warn("No geocode:", c.label, c.address); }
-      // pequeño delay para no saturar Nominatim
-      await new Promise(r => setTimeout(r, 500));
-    } catch(e){ console.error(e); }
-  }
-  console.log("Centros geocodificados:", centrosInfo);
-  // opcional: agregar marcadores de centros en el mapa (desactivado por default)
-  // centrosInfo.forEach(c => {
-  //   if (c.lat) L.circleMarker([c.lat,c.lon],{radius:5,color:'#0c3b2e'}).addTo(map).bindPopup(c.label);
-  // });
-}
-
-/* ============================
-   Helper: show results on UI
-   ============================ */
-function showResults(first, second){
-  document.getElementById('resultsBlock').style.display = 'flex';
-  document.getElementById('firstRes').innerHTML = `<b>${first.label}</b><br>${first.address}<br><span class="small">Distancia por ruta: ${ (first.distance_km || first.distance).toFixed(2) } km</span>`;
-  if (second){
-    document.getElementById('secondRes').innerHTML = `<b>${second.label}</b><br>${second.address}<br><span class="small">Distancia por ruta: ${ (second.distance_km || second.distance).toFixed(2) } km</span>`;
-  } else {
-    document.getElementById('secondRes').innerHTML = '';
-  }
-}
-
-/* ============================
-   Limpia marcadores y rutas
-   ============================ */
-function clearMapGraphics(){
-  if (userMarker) { userMarker.remove(); userMarker = null; }
-  centerMarkers.forEach(m=>m.remove()); centerMarkers = [];
-  routeLayers.forEach(l=>map.removeLayer(l)); routeLayers = [];
-}
-
-/* ============================
-   ORS Matrix (mejor: 1 request para todas las distancias)
-   ============================ */
-async function getRouteDistancesORS(userCoord, centersCoords, apiKey){
-  // construye locations en formato [lon,lat]
-  const locations = [ [userCoord.lon, userCoord.lat], ...centersCoords.map(c => [c.lon, c.lat]) ];
-  const body = {
-    locations: locations,
-    metrics: ["distance"], // distance en metros
-    units: "m"
-  };
-  const res = await fetch('https://api.openrouteservice.org/v2/matrix/driving-car', {
-    method: 'POST',
-    headers: {
-      'Content-Type':'application/json',
-      'Authorization': apiKey
-    },
-    body: JSON.stringify(body)
-  });
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`ORS matrix error: ${res.status} ${txt}`);
-  }
-  const j = await res.json();
-  // j.distances is a matrix distances[i][j] in meters
-  // we want distances from row 0 (user) to each center (columns 1..n)
-  const distsMeters = j.distances[0].slice(1);
-  return distsMeters.map(m => (m==null ? null : m/1000)); // km
-}
-
-/* ============================
-   ORS Directions para trazar ruta (geojson)
-   ============================ */
-async function getRouteGeoJSONORS(from, to, apiKey){
-  const url = 'https://api.openrouteservice.org/v2/directions/driving-car/geojson';
-  const body = { coordinates: [ [from.lon, from.lat], [to.lon, to.lat] ] };
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type':'application/json', 'Authorization': apiKey },
-    body: JSON.stringify(body)
-  });
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`ORS directions error: ${res.status} ${txt}`);
-  }
-  const j = await res.json();
-  return j; // geojson FeatureCollection with geometry
-}
-
-/* ============================
-   Principal: buscar y mostrar 2 centros + map routes
-   ============================ */
-async function handleSearch(){
-  // actualizar ORS key desde input si usuario la pegó
-  const inputKey = document.getElementById('orsKey').value.trim();
-  if (inputKey) ORS_API_KEY = inputKey;
-
-  const q = document.getElementById('localidad').value.trim();
-  if (!q) { alert('Ingresá una localidad'); return; }
-
-  // 1) geocode user via Nominatim
-  let geoUser = null;
-  try {
-    const g = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q + ' Buenos Aires Argentina')}&limit=1`, { headers:{ 'Accept-Language':'es' }});
-    const j = await g.json();
-    if (!j || j.length === 0) {
-      alert('No se encontró la localidad. Probá con otra forma de escribirla.');
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(loc + ", Buenos Aires, Argentina")}&limit=1`,
+        { headers:{'Accept-Language':'es'} }
+      );
+      const js = await res.json();
+      if (!js || js.length === 0) {
+        alert("No se encontró la localidad. Revisá la ortografía.");
+        return;
+      }
+      lat = parseFloat(js[0].lat);
+      lon = parseFloat(js[0].lon);
+    } catch(e) {
+      alert("Error al geocodificar la localidad");
       return;
     }
-    geoUser = { lat: parseFloat(j[0].lat), lon: parseFloat(j[0].lon), display_name: j[0].display_name };
-  } catch(e){
-    alert('Error al geocodificar la localidad: ' + e.message);
-    return;
+
+    // Calcular distancias
+    const lista = centros.map(c => ({
+      ...c,
+      dist: haversineKm(lat, lon, c.lat, c.lon)
+    }));
+
+    lista.sort((a,b)=>a.dist - b.dist);
+
+    const primero = lista[0];
+    const segundo = lista[1];
+
+    // Mostrar resultados
+    document.getElementById("resultsBlock").style.display = 'flex';
+    document.getElementById("firstRes").innerHTML =
+      `<b>${primero.label}</b><br>${primero.address}<br>Distancia: ${primero.dist.toFixed(2)} km`;
+
+    document.getElementById("secondRes").innerHTML =
+      `<b>${segundo.label}</b><br>${segundo.address}<br>Distancia: ${segundo.dist.toFixed(2)} km`;
+
+    // Limpiar marcadores
+    if (userMarker) userMarker.remove();
+    markers.forEach(m=>m.remove());
+    markers = [];
+
+    // Marcar usuario
+    userMarker = L.marker([lat, lon])
+      .addTo(map)
+      .bindPopup(`Localidad: ${loc}`)
+      .openPopup();
+
+    // Marcar centros
+    [primero, segundo].forEach(c => {
+      const mk = L.marker([c.lat, c.lon])
+        .addTo(map)
+        .bindPopup(`${c.label}<br>${c.address}<br>${c.dist.toFixed(1)} km`);
+      markers.push(mk);
+    });
+
+    // Ajustar vista
+    const pts = [[lat, lon], [primero.lat, primero.lon], [segundo.lat, segundo.lon]];
+    map.fitBounds(pts, { padding:[50,50] });
   }
 
-  // 2) asegurarnos que centros tienen lat/lon (ya geocodificados al cargar)
-  const centersCoords = centrosInfo.filter(c => c.lat && c.lon);
-  if (centersCoords.length !== centrosInfo.length){
-    alert('Aún no están listas las coordenadas de los centros. Recargá la página en 10s y probá de nuevo.');
-    return;
-  }
-
-  clearMapGraphics();
-
-  // 3) si ORS key presente -> usar matrix para obtener distancias por ruta real
-  let distancesKm = [];
-  let usedORS = false;
-  if (ORS_API_KEY){
-    try {
-      distancesKm = await getRouteDistancesORS(geoUser, centersCoords, ORS_API_KEY);
-      usedORS = true;
-    } catch(err){
-      console.warn('ORS matrix falló:', err.message);
-      // fallback a Haversine si matrix falla
-      distancesKm = centersCoords.map(c => haversineKm(geoUser.lat, geoUser.lon, c.lat, c.lon));
-      usedORS = false;
-    }
-  } else {
-    // no key -> fallback Haversine
-    distancesKm = centersCoords.map(c => haversineKm(geoUser.lat, geoUser.lon, c.lat, c.lon));
-    usedORS = false;
-  }
-
-  // 4) unir distancias con info de centros y ordenar
-  const list = centersCoords.map((c, i) => ({
-    id: c.id,
-    label: c.label,
-    address: c.address,
-    lat: c.lat,
-    lon: c.lon,
-    distance: distancesKm[i],
-    distance_km: distancesKm[i]
-  }));
-  list.sort((a,b) => (a.distance || 1e9) - (b.distance || 1e9));
-
-  const first = list[0];
-  const second = list[1];
-
-  // 5) mostrar texto
-  showResults(first, second);
-
-  // 6) dibujar en mapa: marcador usuario y rutas a primero y segundo
-  userMarker = L.marker([geoUser.lat, geoUser.lon], { icon: L.icon({ iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png', iconAnchor:[12,41] }) })
-    .addTo(map)
-    .bindPopup(`<b>Localidad:</b> ${q}`).openPopup();
-
-  // marcador centros
-  const mk1 = L.marker([first.lat, first.lon], { icon: L.icon({ iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png' }) })
-    .addTo(map).bindPopup(`<b>${first.label}</b><br>${first.address}<br>${(first.distance_km||first.distance).toFixed(2)} km`);
-  centerMarkers.push(mk1);
-  if (second) {
-    const mk2 = L.marker([second.lat, second.lon], { icon: L.icon({ iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png' }) })
-      .addTo(map).bindPopup(`<b>${second.label}</b><br>${second.address}<br>${(second.distance_km||second.distance).toFixed(2)} km`);
-    centerMarkers.push(mk2);
-  }
-
-  // 7) rutas: si usamos ORS -> pedir directions para 1 y 2 y trazar
-  if (usedORS && ORS_API_KEY){
-    try {
-      const route1 = await getRouteGeoJSONORS({lat:geoUser.lat, lon:geoUser.lon}, {lat:first.lat, lon:first.lon}, ORS_API_KEY);
-      const layer1 = L.geoJSON(route1, { style:{ color:'#0c3b2e', weight:5, opacity:0.85 } }).addTo(map);
-      routeLayers.push(layer1);
-
-      if (second) {
-        const route2 = await getRouteGeoJSONORS({lat:geoUser.lat, lon:geoUser.lon}, {lat:second.lat, lon:second.lon}, ORS_API_KEY);
-        const layer2 = L.geoJSON(route2, { style:{ color:'#1f7fb0', weight:4, opacity:0.85 } }).addTo(map);
-        routeLayers.push(layer2);
-      }
-    } catch(e){
-      console.warn('Error al trazar rutas ORS:', e.message);
-      // si falla, dibujamos líneas rectas como fallback
-      const l1 = L.polyline([[geoUser.lat,geoUser.lon],[first.lat,first.lon]], {color:'#0c3b2e', weight:3, dashArray:'6 6'}).addTo(map);
-      routeLayers.push(l1);
-      if (second) {
-        const l2 = L.polyline([[geoUser.lat,geoUser.lon],[second.lat,second.lon]], {color:'#1f7fb0', weight:3, dashArray:'6 6'}).addTo(map);
-        routeLayers.push(l2);
-      }
-    }
-  } else {
-    // sin ORS: dibujar líneas rectas (fallback)
-    const l1 = L.polyline([[geoUser.lat,geoUser.lon],[first.lat,first.lon]], {color:'#0c3b2e', weight:3, dashArray:'6 6'}).addTo(map);
-    routeLayers.push(l1);
-    if (second) {
-      const l2 = L.polyline([[geoUser.lat,geoUser.lon],[second.lat,second.lon]], {color:'#1f7fb0', weight:3, dashArray:'6 6'}).addTo(map);
-      routeLayers.push(l2);
-    }
-  }
-
-  // ajustar vista para mostrar todo
-  const bounds = L.latLngBounds([[geoUser.lat,geoUser.lon],[first.lat,first.lon]]);
-  if (second) bounds.extend([second.lat, second.lon]);
-  map.fitBounds(bounds.pad(0.25));
-}
-
-/* ============================
-   Inicialización
-   ============================ */
-(async function init(){
-  // intentar leer key desde input si el desarrollador la pegó arriba del script
-  const presetKey = ORS_API_KEY;
-  if (presetKey) document.getElementById('orsKey').value = presetKey;
-
-  // geocodificar centros (usa Nominatim) — esto tarda unos segundos (9 centros)
-  await geocodeAllCenters();
-})();
-
-/* ============================
-   Eventos UI
-   ============================ */
-document.getElementById('buscarBtn').addEventListener('click', handleSearch);
-document.getElementById('limpiarBtn').addEventListener('click', ()=>{
-  document.getElementById('localidad').value = '';
-  clearMapGraphics();
-  document.getElementById('resultsBlock').style.display = 'none';
-});
-document.getElementById('localidad').addEventListener('keypress', e => { if (e.key === 'Enter') handleSearch(); });
+  document.getElementById("buscarBtn").addEventListener("click", buscar);
+  document.getElementById("localidad").addEventListener("keypress", e => {
+    if (e.key === "Enter") buscar();
+  });
 
 </script>
+
 </body>
 </html>
