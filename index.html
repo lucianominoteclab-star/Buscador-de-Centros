@@ -1,6 +1,121 @@
-<script>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Buscador de Centros Siglo 21 — Tiempo de viaje (optimizado)</title>
 
-/* ============================ CONFIG & DATA ============================ */
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<style>
+  :root{
+    --verde:#0c3b2e;
+    --verde-2:#105c47;
+    --bg:#f6f7f8;
+    --card:#ffffff;
+    --muted:#6b7280;
+    --accent:#1f7fb0;
+    --radius:12px;
+  }
+  *{box-sizing:border-box}
+  body{
+    font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+    margin:0; background:var(--bg); color:#071023;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  header{
+    background:linear-gradient(90deg,var(--verde) 0%, var(--verde-2) 100%);
+    color:white; padding:14px 18px; display:flex; align-items:center; gap:12px;
+  }
+  header img{height:36px; display:inline-block}
+  header h1{font-size:18px; margin:0; font-weight:700}
+
+  .container{max-width:1100px; margin:20px auto; padding:0 18px}
+
+  .grid{display:grid; grid-template-columns: 1fr 460px; gap:20px}
+  @media(max-width:980px){ .grid{grid-template-columns:1fr} }
+
+  .panel{background:var(--card); border-radius:var(--radius); padding:18px; box-shadow:0 8px 24px rgba(8,12,16,0.06)}
+
+  .title{color:var(--verde); font-size:20px; margin:0 0 6px 0; font-weight:700}
+  .lead{color:var(--muted); margin:0 0 14px 0}
+
+  .searchRow{display:flex; gap:10px; align-items:center}
+  .searchRow input{
+    flex:1; padding:12px 14px; border-radius:10px; border:1px solid #e6e9ea; font-size:15px;
+  }
+  .btn{
+    background:var(--verde); color:white; border:none; padding:11px 14px; border-radius:10px; cursor:pointer; font-weight:600;
+    box-shadow:0 6px 18px rgba(12,19,24,0.08);
+  }
+  .btn.secondary{ background:#f3f4f6; color:#223; border:1px solid #e6e9ea }
+
+  .small{font-size:13px;color:var(--muted); margin-top:10px}
+
+  #map{height:460px; border-radius:10px; border:1px solid #e9eef0; overflow:hidden}
+
+  .results { margin-top:14px; display:flex; gap:12px; flex-wrap:wrap }
+  .cardRes{
+    background:linear-gradient(180deg,#fff,#fbfffb); border-radius:10px; padding:12px; min-width:260px;
+    box-shadow:0 6px 18px rgba(12,19,24,0.04); border-left:6px solid var(--verde);
+    transform:translateY(10px); opacity:0; transition: all .36s ease;
+  }
+  .cardRes.visible{transform:translateY(0); opacity:1}
+  .cardRes h4{margin:0 0 6px 0; font-size:16px}
+  .muted{color:var(--muted); font-size:13px}
+
+  .loader{display:inline-block; width:18px; height:18px; border-radius:50%; border:3px solid rgba(255,255,255,0.2); border-top-color:white; animation:spin .9s linear infinite}
+  @keyframes spin{ to{ transform:rotate(360deg) } }
+
+  .meta{font-size:13px; color:var(--muted); margin-top:12px}
+</style>
+</head>
+<body>
+
+<header>
+  <img src="https://www.universidadsiglo21.edu.ar/themes/custom/us21/logo.svg" alt="Siglo 21" onerror="this.style.display='none'">
+  <h1>Buscador de Centros Siglo 21 — Tiempo de viaje (optimizado)</h1>
+</header>
+
+<div class="container">
+  <div class="grid">
+    <!-- LEFT: Search + info -->
+    <div class="panel">
+      <p class="title">Encontrá el centro más rápido por tiempo de viaje</p>
+      <p class="lead">Escribí la localidad (ENTER o Buscar). Calculamos el <strong>tiempo estimado</strong> de viaje a cada centro y mostramos los 2 mejores. Mapa interactivo incluido.</p>
+
+      <div class="searchRow" style="margin-bottom:10px">
+        <input id="localidad" placeholder="Ej: Virrey del Pino" aria-label="Localidad">
+        <button id="buscarBtn" class="btn">Buscar</button>
+        <button id="limpiarBtn" class="btn secondary">Limpiar</button>
+      </div>
+
+      <div id="status" class="small">Listo</div>
+
+      <div class="results" id="results">
+        <div id="firstCard" class="cardRes" aria-live="polite"></div>
+        <div id="secondCard" class="cardRes" aria-live="polite"></div>
+      </div>
+
+      <div class="meta">Motor de rutas: <strong>OSRM público</strong> (sin API key). Si OSRM falla, usamos distancia en línea como fallback.</div>
+    </div>
+
+    <!-- RIGHT: MAP -->
+    <div class="panel">
+      <div id="map"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================
+   CONFIG & DATA
+   ============================ */
 const CENTROS = [
   { id:'san_miguel', label:'Cau San Miguel', lat:-34.54313, lon:-58.71267, addr:'Av. León Gallardo 207, Muñiz' },
   { id:'don_torcuato', label:'Cau Don Torcuato', lat:-34.47175, lon:-58.63324, addr:'Av. Ángel T. de Alvear 2555, Don Torcuato' },
@@ -13,43 +128,23 @@ const CENTROS = [
   { id:'banfield', label:'Cau Banfield', lat:-34.74188, lon:-58.39118, addr:'Vieytes 211, Banfield' }
 ];
 
-const OSRM_BASE = 'https://router.project-osrm.org';
-const CACHE = new Map();
+const OSRM_BASE = 'https://router.project-osrm.org'; // public OSRM server
+const CACHE = new Map(); // cache por "lat,lon" -> resultados
 
-/* ============================ CACHE PERMANENTE ============================ */
-
-// Guardar en almacenamiento permanente del navegador
-function saveToPermanentCache(key, data){
-  try {
-    localStorage.setItem("rutas_cache_" + key, JSON.stringify(data));
-  } catch(e){ console.warn("No se pudo guardar en localStorage", e); }
-}
-
-// Cargar del almacenamiento permanente
-function loadFromPermanentCache(key){
-  try {
-    const raw = localStorage.getItem("rutas_cache_" + key);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch(e){
-    console.warn("No se pudo leer localStorage", e);
-    return null;
-  }
-}
-
-
-/* ============================ UTIL: Haversine (km) ============================ */
+/* ============================
+   UTIL: Haversine (km)
+   ============================ */
 function haversineKm(lat1, lon1, lat2, lon2){
   const R = 6371;
   const dLat = (lat2-lat1)*Math.PI/180;
   const dLon = (lon2-lon1)*Math.PI/180;
-  const a = Math.sin(dLat/2)**2 +
-    Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180) *
-    Math.sin(dLon/2)**2;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-/* ============================ MAP Init ============================ */
+/* ============================
+   MAP Init
+   ============================ */
 const map = L.map('map', { preferCanvas:true }).setView([-34.65, -58.5], 10);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19 }).addTo(map);
 
@@ -57,48 +152,43 @@ let userMarker = null;
 let centroMarkers = [];
 let routeLayers = [];
 
-/* ============================ UI helpers ============================ */
+/* ============================
+   UI helpers
+   ============================ */
 const statusEl = document.getElementById('status');
 function setStatus(text, busy=false){
-  statusEl.innerHTML = busy
-    ? `<span class="loader" style="vertical-align:middle;margin-right:8px"></span>${text}`
-    : text;
+  statusEl.innerHTML = busy ? `<span class="loader" style="vertical-align:middle;margin-right:8px"></span>${text}` : text;
 }
 
-/* ============================ Geocode user input ============================ */
+/* ============================
+   Geocode user input (Nominatim)
+   ============================ */
 async function geocodeLocalidad(q){
-  const url =
-    `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q + ', Buenos Aires, Argentina')}&limit=1`;
+  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q + ', Buenos Aires, Argentina')}&limit=1`;
   const r = await fetch(url, { headers:{ 'Accept-Language':'es' }});
   if (!r.ok) throw new Error('Error geocoding');
   const j = await r.json();
   if (!j || j.length === 0) return null;
-
-  return {
-    lat: parseFloat(j[0].lat),
-    lon: parseFloat(j[0].lon),
-    display_name: j[0].display_name
-  };
+  return { lat: parseFloat(j[0].lat), lon: parseFloat(j[0].lon), display_name: j[0].display_name };
 }
 
-/* ============================ OSRM: durations ============================ */
+/* ============================
+   OSRM: pedir duración para un par (overview=false -> rápido)
+   ============================ */
 async function osrmDuration(origin, dest){
-  const url =
-    `${OSRM_BASE}/route/v1/driving/${origin.lon},${origin.lat};${dest.lon},${dest.lat}?overview=false`;
+  const url = `${OSRM_BASE}/route/v1/driving/${origin.lon},${origin.lat};${dest.lon},${dest.lat}?overview=false`;
   const r = await fetch(url);
   if (!r.ok) throw new Error('OSRM error: ' + r.status);
   const j = await r.json();
   if (!j.routes || !j.routes[0]) throw new Error('OSRM no route');
-  return {
-    duration_s: j.routes[0].duration,
-    distance_m: j.routes[0].distance
-  };
+  return { duration_s: j.routes[0].duration, distance_m: j.routes[0].distance };
 }
 
-/* ============================ OSRM: full route for drawing ============================ */
+/* ============================
+   OSRM: pedir geojson para trazar ruta (solo para top2)
+   ============================ */
 async function osrmRouteGeoJson(origin, dest){
-  const url =
-    `${OSRM_BASE}/route/v1/driving/${origin.lon},${origin.lat};${dest.lon},${dest.lat}?overview=full&geometries=geojson`;
+  const url = `${OSRM_BASE}/route/v1/driving/${origin.lon},${origin.lat};${dest.lon},${dest.lat}?overview=full&geometries=geojson`;
   const r = await fetch(url);
   if (!r.ok) throw new Error('OSRM error: ' + r.status);
   const j = await r.json();
@@ -106,194 +196,173 @@ async function osrmRouteGeoJson(origin, dest){
   return j.routes[0].geometry;
 }
 
-/* ============================ Drawing ============================ */
+/* ============================
+   Dibujar resultados en mapa y tarjetas
+   ============================ */
 function clearMapGraphics(){
   if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
-  centroMarkers.forEach(m => map.removeLayer(m));
-  centroMarkers = [];
-  routeLayers.forEach(l => map.removeLayer(l));
-  routeLayers = [];
+  centroMarkers.forEach(m => map.removeLayer(m)); centroMarkers = [];
+  routeLayers.forEach(l => map.removeLayer(l)); routeLayers = [];
 }
 
 function renderCardsAndMap(sortedList, userLat, userLon, withRoutesGeojson={first:null,second:null}){
   const first = sortedList[0];
   const second = sortedList[1];
 
+  // tarjetas
   const firstCard = document.getElementById('firstCard');
   const secondCard = document.getElementById('secondCard');
 
-  firstCard.innerHTML = `
-    <h4>${first.label}</h4>
+  firstCard.innerHTML = `<h4>${first.label}</h4>
     <div class="muted">${first.addr}</div>
-    <div style="margin-top:8px"><strong>${
-      first.duration_min ? first.duration_min.toFixed(0)+' min'
-                         : first.distance_km.toFixed(2)+' km'
-    }</strong></div>
-    <div class="muted" style="margin-top:6px">${
-      first.distance_km ? first.distance_km.toFixed(2)+' km (ruta)' : ''
-    }</div>`;
+    <div style="margin-top:8px"><strong>${ (first.duration_min? first.duration_min.toFixed(0)+' min' : (first.distance_km? first.distance_km.toFixed(2)+' km' : '—')) }</strong></div>
+    <div class="muted" style="margin-top:6px">${ first.distance_km ? first.distance_km.toFixed(2) + ' km (ruta)' : '' }</div>`;
   firstCard.classList.add('visible');
 
   if (second){
-    secondCard.innerHTML = `
-      <h4>${second.label}</h4>
+    secondCard.innerHTML = `<h4>${second.label}</h4>
       <div class="muted">${second.addr}</div>
-      <div style="margin-top:8px"><strong>${
-        second.duration_min ? second.duration_min.toFixed(0)+' min'
-                            : second.distance_km.toFixed(2)+' km'
-      }</strong></div>
-      <div class="muted" style="margin-top:6px">${
-        second.distance_km ? second.distance_km.toFixed(2)+' km (ruta)' : ''
-      }</div>`;
+      <div style="margin-top:8px"><strong>${ (second.duration_min? second.duration_min.toFixed(0)+' min' : (second.distance_km? second.distance_km.toFixed(2)+' km' : '—')) }</strong></div>
+      <div class="muted" style="margin-top:6px">${ second.distance_km ? second.distance_km.toFixed(2) + ' km (ruta)' : '' }</div>`;
     secondCard.classList.add('visible');
   } else {
-    secondCard.innerHTML = '';
-    secondCard.classList.remove('visible');
+    secondCard.innerHTML = ''; secondCard.classList.remove('visible');
   }
 
+  // mapa
   clearMapGraphics();
+  userMarker = L.marker([userLat, userLon]).addTo(map).bindPopup('Localidad buscada').openPopup();
 
-  userMarker = L.marker([userLat, userLon])
-    .addTo(map).bindPopup('Localidad buscada').openPopup();
-
-  [first, second].forEach(c => {
+  // marcar primero y segundo
+  [first, second].forEach((c, idx) => {
     if (!c) return;
-    const m = L.marker([c.lat, c.lon])
-      .addTo(map).bindPopup(`<b>${c.label}</b><br>${c.addr}`);
+    const m = L.marker([c.lat, c.lon]).addTo(map).bindPopup(`<b>${c.label}</b><br>${c.addr}`);
     centroMarkers.push(m);
   });
 
+  // si tenemos geometrías de rutas (geojson) las dibujamos; sino dibujamos líneas rectas
   if (withRoutesGeojson.first){
-    const g1 = L.geoJSON(withRoutesGeojson.first, {
-      style:{ color:'#0c3b2e', weight:5, opacity:0.9 }
-    }).addTo(map);
+    const g1 = L.geoJSON(withRoutesGeojson.first, { style:{ color:'#0c3b2e', weight:5, opacity:0.9 } }).addTo(map);
     routeLayers.push(g1);
+  } else if (first) {
+    const l = L.polyline([[userLat,userLon],[first.lat, first.lon]], { color:'#0c3b2e', weight:3, dashArray:'6 6' }).addTo(map); routeLayers.push(l);
   }
 
   if (withRoutesGeojson.second){
-    const g2 = L.geoJSON(withRoutesGeojson.second, {
-      style:{ color:'#1f7fb0', weight:4, opacity:0.9 }
-    }).addTo(map);
+    const g2 = L.geoJSON(withRoutesGeojson.second, { style:{ color:'#1f7fb0', weight:4, opacity:0.9 } }).addTo(map);
     routeLayers.push(g2);
+  } else if (second){
+    const l2 = L.polyline([[userLat,userLon],[second.lat, second.lon]], { color:'#1f7fb0', weight:3, dashArray:'6 6' }).addTo(map); routeLayers.push(l2);
   }
 
+  // ajustar vista
   const bounds = L.latLngBounds([[userLat,userLon],[first.lat, first.lon]]);
   if (second) bounds.extend([second.lat, second.lon]);
   map.fitBounds(bounds.pad(0.25));
 }
 
-/* ============================ MAIN SEARCH ============================ */
+/* ============================
+   Búsqueda principal (optimizada)
+   ============================ */
 async function handleSearch(){
   const q = document.getElementById('localidad').value.trim();
-  if (!q){ alert('Ingresá una localidad'); return; }
+  if (!q) { alert('Ingresá una localidad'); return; }
 
   setStatus('Buscando localidad...', true);
 
+  // cache key (simple)
   const cacheKey = q.toLowerCase();
 
-  /* === CACHE RAM (inmediato) === */
+  // check cache
   if (CACHE.has(cacheKey)){
     const cached = CACHE.get(cacheKey);
     renderCardsAndMap(cached.sorted, cached.user.lat, cached.user.lon, cached.geojson || {});
-    setStatus('Resultado (cache en memoria) listo');
+    setStatus('Resultado (cache) listo');
     return;
   }
 
-  /* === CACHE PERMANENTE (localStorage) === */
-  const perm = loadFromPermanentCache(cacheKey);
-  if (perm){
-    CACHE.set(cacheKey, perm); // lo pasamos a RAM
-    renderCardsAndMap(perm.sorted, perm.user.lat, perm.user.lon, perm.geojson || {});
-    setStatus('Resultado (cache permanente) listo');
-    return;
-  }
-
-  /* === NO CACHE → calcular === */
+  // 1) geocode
   let geo;
   try {
     geo = await geocodeLocalidad(q);
-    if (!geo){
-      alert('No se encontró la localidad.');
-      setStatus('Localidad no encontrada');
-      return;
-    }
+    if (!geo) { alert('No se encontró la localidad. Probá otra variación.'); setStatus('Localidad no encontrada'); return; }
   } catch(e){
-    alert('Error geocodificando');
+    console.error(e);
+    alert('Error al geocodificar la localidad. Intentá de nuevo.');
+    setStatus('Error geocoding');
     return;
   }
 
-  setStatus('Calculando tiempos...', true);
+  setStatus('Calculando tiempos (rápido)...', true);
 
+  // 2) obtener duración a cada centro EN PARALELO (overview=false -> rápido)
+  // preparar promesas
   const origin = { lat: geo.lat, lon: geo.lon };
 
-  const promises = CENTROS.map(c =>
+  // lanzar promesas en paralelo
+  const promises = CENTROS.map(c => (
     osrmDuration(origin, { lat:c.lat, lon:c.lon })
-      .then(res => ({
-        id:c.id,
-        label:c.label,
-        lat:c.lat,
-        lon:c.lon,
-        addr:c.addr,
-        duration_s: res.duration_s,
-        distance_m: res.distance_m
-      }))
-      .catch(() => {
+      .then(res => ({ id:c.id, label:c.label, lat:c.lat, lon:c.lon, addr:c.addr, duration_s: res.duration_s, distance_m: res.distance_m }))
+      .catch(err => {
+        // fallback: usar haversine distance (convertir a "duration" con velocidad estimada 50 km/h)
+        console.warn('OSRM fallo para', c.label, err.message);
         const d_km = haversineKm(origin.lat, origin.lon, c.lat, c.lon);
-        const duration_s = (d_km/50)*3600;
-        return {
-          id:c.id,
-          label:c.label,
-          lat:c.lat,
-          lon:c.lon,
-          addr:c.addr,
-          duration_s,
-          distance_m: d_km*1000,
-          fallback:true
-        };
+        const duration_s = (d_km / 50) * 3600; // suposición 50 km/h
+        return { id:c.id, label:c.label, lat:c.lat, lon:c.lon, addr:c.addr, duration_s, distance_m: d_km*1000, fallback:true };
       })
-  );
+  ));
 
   let results;
-  try { results = await Promise.all(promises); }
-  catch(e){ alert('Error consultando rutas'); return; }
+  try {
+    results = await Promise.all(promises); // paralelo
+  } catch(e){
+    console.warn('Error en promesas OSRM', e);
+    alert('Error al consultar tiempos. Intentá de nuevo.');
+    setStatus('Error al calcular tiempos');
+    return;
+  }
 
+  // mapear a formato usado y ordenar por duration
   const list = results.map(r => ({
     ...r,
-    duration_min: r.duration_s / 60,
-    distance_km: r.distance_m/1000
+    duration_min: r.duration_s/60,
+    distance_km: r.distance_m ? r.distance_m/1000 : haversineKm(origin.lat, origin.lon, r.lat, r.lon)
   }));
-
   list.sort((a,b) => a.duration_min - b.duration_min);
 
-  setStatus('Obteniendo rutas principales...', true);
+  setStatus('Obteniendo rutas para los 2 primeros (optimizado)...', true);
 
+  // 3) pedir geometrías solo para los top2 (overview=full)
   let geojsonFirst = null, geojsonSecond = null;
   try {
-    if (list[0]) geojsonFirst = await osrmRouteGeoJson(origin, list[0]);
-    if (list[1]) geojsonSecond = await osrmRouteGeoJson(origin, list[1]);
-  } catch(e){}
+    if (list[0]) {
+      geojsonFirst = await osrmRouteGeoJson(origin, { lat:list[0].lat, lon:list[0].lon });
+    }
+    if (list[1]) {
+      geojsonSecond = await osrmRouteGeoJson(origin, { lat:list[1].lat, lon:list[1].lon });
+    }
+  } catch(e){
+    console.warn('Error obteniendo geojson (OK fallback):', e.message);
+    // no abortamos; fallback a líneas rectas
+    geojsonFirst = geojsonFirst || null;
+    geojsonSecond = geojsonSecond || null;
+  }
 
+  // 4) preparar sorted list con durations en minutos
   const sorted = list.map(x => ({ ...x, duration_min: x.duration_s/60 }));
 
-  /* === GUARDAR EN CACHE (RAM + permanente) === */
-  const dataToSave = {
-    user:origin,
-    sorted,
-    geojson:{ first:geojsonFirst, second:geojsonSecond }
-  };
+  // guardar en cache
+  CACHE.set(cacheKey, { user:origin, sorted, geojson: { first: geojsonFirst, second: geojsonSecond } });
 
-  CACHE.set(cacheKey, dataToSave);
-  saveToPermanentCache(cacheKey, dataToSave);
-
-  renderCardsAndMap(sorted, origin.lat, origin.lon, {
-    first: geojsonFirst,
-    second: geojsonSecond
-  });
+  // 5) renderizar
+  renderCardsAndMap(sorted, origin.lat, origin.lon, { first: geojsonFirst, second: geojsonSecond });
 
   setStatus('Resultado listo');
 }
 
-/* ============================ EVENTS ============================ */
+/* ============================
+   EVENTS
+   ============================ */
 document.getElementById('buscarBtn').addEventListener('click', handleSearch);
 document.getElementById('limpiarBtn').addEventListener('click', ()=>{
   document.getElementById('localidad').value = '';
@@ -302,12 +371,11 @@ document.getElementById('limpiarBtn').addEventListener('click', ()=>{
   setStatus('Listo');
   clearMapGraphics();
 });
-document.getElementById('localidad').addEventListener('keypress', e =>{
-  if (e.key === 'Enter') handleSearch();
-});
+document.getElementById('localidad').addEventListener('keypress', e => { if (e.key === 'Enter') handleSearch(); });
 
-window.addEventListener('load', ()=> setTimeout(()=>{
-  document.getElementById('localidad').focus();
-}, 300));
+/* foco input */
+window.addEventListener('load', ()=> setTimeout(()=> document.getElementById('localidad').focus(), 300));
 
 </script>
+</body>
+</html>
