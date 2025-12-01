@@ -1,223 +1,381 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Buscador de Centros Siglo 21</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Buscador de Centros Siglo 21 — Tiempo de viaje (optimizado)</title>
 
-  <!-- Leaflet (MAPA) -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 
-  <style>
-    :root {
-      --verde21: #0c3b2e;
-      --verde21-light: #105c47;
-    }
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #f4f4f4;
-      margin: 0;
-      padding: 0;
-      text-align: center;
-    }
+<style>
+  :root{
+    --verde:#0c3b2e;
+    --verde-2:#105c47;
+    --bg:#f6f7f8;
+    --card:#ffffff;
+    --muted:#6b7280;
+    --accent:#1f7fb0;
+    --radius:12px;
+  }
+  *{box-sizing:border-box}
+  body{
+    font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+    margin:0; background:var(--bg); color:#071023;
+    -webkit-font-smoothing:antialiased;
+  }
 
-    header {
-      background-color: var(--verde21);
-      padding: 20px;
-      color: white;
-      font-size: 22px;
-      font-weight: bold;
-    }
+  header{
+    background:linear-gradient(90deg,var(--verde) 0%, var(--verde-2) 100%);
+    color:white; padding:14px 18px; display:flex; align-items:center; gap:12px;
+  }
+  header img{height:36px; display:inline-block}
+  header h1{font-size:18px; margin:0; font-weight:700}
 
-    h1 {
-      margin-top: 25px;
-      color: var(--verde21);
-    }
+  .container{max-width:1100px; margin:20px auto; padding:0 18px}
 
-    .card {
-      background: white;
-      width: 90%;
-      max-width: 550px;
-      padding: 25px;
-      margin: 20px auto;
-      border-radius: 15px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-    }
+  .grid{display:grid; grid-template-columns: 1fr 460px; gap:20px}
+  @media(max-width:980px){ .grid{grid-template-columns:1fr} }
 
-    input {
-      width: 90%;
-      padding: 12px;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-      font-size: 16px;
-      margin-bottom: 10px;
-    }
+  .panel{background:var(--card); border-radius:var(--radius); padding:18px; box-shadow:0 8px 24px rgba(8,12,16,0.06)}
 
-    button {
-      background-color: var(--verde21);
-      color: white;
-      border: none;
-      padding: 12px 22px;
-      border-radius: 8px;
-      font-size: 16px;
-      cursor: pointer;
-      transition: 0.3s;
-    }
+  .title{color:var(--verde); font-size:20px; margin:0 0 6px 0; font-weight:700}
+  .lead{color:var(--muted); margin:0 0 14px 0}
 
-    button:hover {
-      background-color: var(--verde21-light);
-    }
+  .searchRow{display:flex; gap:10px; align-items:center}
+  .searchRow input{
+    flex:1; padding:12px 14px; border-radius:10px; border:1px solid #e6e9ea; font-size:15px;
+  }
+  .btn{
+    background:var(--verde); color:white; border:none; padding:11px 14px; border-radius:10px; cursor:pointer; font-weight:600;
+    box-shadow:0 6px 18px rgba(12,19,24,0.08);
+  }
+  .btn.secondary{ background:#f3f4f6; color:#223; border:1px solid #e6e9ea }
 
-    #resultado-card {
-      display:none;
-      background:#ffffff;
-      width:90%;
-      max-width:650px;
-      margin:20px auto;
-      padding:20px;
-      border-radius:15px;
-      box-shadow:0 4px 10px rgba(0,0,0,0.1);
-      text-align:left;
-      border-left:8px solid var(--verde21);
-      opacity:0;
-      transform: translateY(10px);
-      transition: all 0.4s ease;
-    }
+  .small{font-size:13px;color:var(--muted); margin-top:10px}
 
-    #map {
-      height: 350px;
-      width: 90%;
-      max-width: 650px;
-      margin: 20px auto;
-      border-radius: 12px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-    }
-  </style>
+  #map{height:460px; border-radius:10px; border:1px solid #e9eef0; overflow:hidden}
+
+  .results { margin-top:14px; display:flex; gap:12px; flex-wrap:wrap }
+  .cardRes{
+    background:linear-gradient(180deg,#fff,#fbfffb); border-radius:10px; padding:12px; min-width:260px;
+    box-shadow:0 6px 18px rgba(12,19,24,0.04); border-left:6px solid var(--verde);
+    transform:translateY(10px); opacity:0; transition: all .36s ease;
+  }
+  .cardRes.visible{transform:translateY(0); opacity:1}
+  .cardRes h4{margin:0 0 6px 0; font-size:16px}
+  .muted{color:var(--muted); font-size:13px}
+
+  .loader{display:inline-block; width:18px; height:18px; border-radius:50%; border:3px solid rgba(255,255,255,0.2); border-top-color:white; animation:spin .9s linear infinite}
+  @keyframes spin{ to{ transform:rotate(360deg) } }
+
+  .meta{font-size:13px; color:var(--muted); margin-top:12px}
+</style>
 </head>
-
 <body>
 
-<header>Buscador de Centros Siglo 21</header>
+<header>
+  <img src="https://www.universidadsiglo21.edu.ar/themes/custom/us21/logo.svg" alt="Siglo 21" onerror="this.style.display='none'">
+  <h1>Buscador de Centros Siglo 21 — Tiempo de viaje (optimizado)</h1>
+</header>
 
-<h1>Encontrá tu centro más cercano</h1>
+<div class="container">
+  <div class="grid">
+    <!-- LEFT: Search + info -->
+    <div class="panel">
+      <p class="title">Encontrá el centro más rápido por tiempo de viaje</p>
+      <p class="lead">Escribí la localidad (ENTER o Buscar). Calculamos el <strong>tiempo estimado</strong> de viaje a cada centro y mostramos los 2 mejores. Mapa interactivo incluido.</p>
 
-<div class="card">
-  <input id="localidad" placeholder="Ingresá tu localidad..." />
-  <button onclick="buscarCentro()">Buscar centro</button>
+      <div class="searchRow" style="margin-bottom:10px">
+        <input id="localidad" placeholder="Ej: Virrey del Pino" aria-label="Localidad">
+        <button id="buscarBtn" class="btn">Buscar</button>
+        <button id="limpiarBtn" class="btn secondary">Limpiar</button>
+      </div>
+
+      <div id="status" class="small">Listo</div>
+
+      <div class="results" id="results">
+        <div id="firstCard" class="cardRes" aria-live="polite"></div>
+        <div id="secondCard" class="cardRes" aria-live="polite"></div>
+      </div>
+
+      <div class="meta">Motor de rutas: <strong>OSRM público</strong> (sin API key). Si OSRM falla, usamos distancia en línea como fallback.</div>
+    </div>
+
+    <!-- RIGHT: MAP -->
+    <div class="panel">
+      <div id="map"></div>
+    </div>
+  </div>
 </div>
-
-<div id="resultado-card">
-  <h2 style="margin:0; color:#0c3b2e; display:flex; align-items:center; gap:8px;">
-    <span>📍</span> Resultado
-  </h2>
-  <div id="resultado" style="margin-top:10px; font-size:16px;"></div>
-</div>
-
-<div id="map"></div>
 
 <script>
-  // Centros con coordenadas exactas desde Google Maps
-  const centros = [
-    { nombre: "San Miguel", direccion: "Av. León Gallardo 207, Muñiz", lat: -34.54313, lon: -58.71267 },
-    { nombre: "Don Torcuato", direccion: "Ángel T. de Alvear 2555, Don Torcuato", lat: -34.47175, lon: -58.63324 },
-    { nombre: "Hurlingham", direccion: "Arturo Jauretche 1435, Hurlingham", lat: -34.58626, lon: -58.63928 },
-    { nombre: "Cañuelas", direccion: "Libertad 1200, Cañuelas", lat: -35.0526, lon: -58.7541 },
-    { nombre: "San Martín", direccion: "Sarmiento 1887, San Martín", lat: -34.56873, lon: -58.5416 },
-    { nombre: "Parque Leloir", direccion: "Martin Fierro 3246, Villa Udaondo", lat: -34.6331, lon: -58.6876 },
-    { nombre: "Munro", direccion: "Vélez Sarsfield 4898, Munro", lat: -34.5305, lon: -58.5219 },
-    { nombre: "Merlo", direccion: "Avellaneda 673, Merlo", lat: -34.6693, lon: -58.7291 },
-    { nombre: "Banfield", direccion: "Vieytes 211, Banfield", lat: -34.74188, lon: -58.39118 }
-  ];
+/* ============================
+   CONFIG & DATA
+   ============================ */
+const CENTROS = [
+  { id:'san_miguel', label:'Cau San Miguel', lat:-34.54313, lon:-58.71267, addr:'Av. León Gallardo 207, Muñiz' },
+  { id:'don_torcuato', label:'Cau Don Torcuato', lat:-34.47175, lon:-58.63324, addr:'Av. Ángel T. de Alvear 2555, Don Torcuato' },
+  { id:'hurlingham', label:'Cau Hurlingham', lat:-34.58626, lon:-58.63928, addr:'Arturo Jauretche 1435, Hurlingham' },
+  { id:'canuelas', label:'Cau Cañuelas', lat:-35.0526, lon:-58.7541, addr:'Av. Libertad 1200, Cañuelas' },
+  { id:'san_martin', label:'Cau San Martín', lat:-34.56873, lon:-58.5416, addr:'Sarmiento 1887, San Martín' },
+  { id:'parque_leloir', label:'Cau Parque Leloir', lat:-34.63310, lon:-58.68760, addr:'Av. Martín Fierro 3246, Villa Udaondo' },
+  { id:'munro', label:'Cau Munro', lat:-34.53050, lon:-58.52190, addr:'Vélez Sársfield 4898, Munro' },
+  { id:'merlo', label:'Cau Merlo', lat:-34.66930, lon:-58.72910, addr:'Avellaneda 673, Merlo' },
+  { id:'banfield', label:'Cau Banfield', lat:-34.74188, lon:-58.39118, addr:'Vieytes 211, Banfield' }
+];
 
-  let map = L.map('map').setView([-34.60, -58.45], 10);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19
-  }).addTo(map);
+const OSRM_BASE = 'https://router.project-osrm.org'; // public OSRM server
+const CACHE = new Map(); // cache por "lat,lon" -> resultados
 
-  let routeLayer;
+/* ============================
+   UTIL: Haversine (km)
+   ============================ */
+function haversineKm(lat1, lon1, lat2, lon2){
+  const R = 6371;
+  const dLat = (lat2-lat1)*Math.PI/180;
+  const dLon = (lon2-lon1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
 
-  function trazarRuta(origen, destino) {
-    if (routeLayer) routeLayer.remove();
+/* ============================
+   MAP Init
+   ============================ */
+const map = L.map('map', { preferCanvas:true }).setView([-34.65, -58.5], 10);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19 }).addTo(map);
 
-    fetch(`https://router.project-osrm.org/route/v1/driving/${origen.lon},${origen.lat};${destino.lon},${destino.lat}?overview=full&geometries=geojson`)
-      .then(res => res.json())
-      .then(data => {
-        const coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
-        routeLayer = L.polyline(coords, {color:"green", weight:5}).addTo(map);
-        map.fitBounds(routeLayer.getBounds());
-      });
+let userMarker = null;
+let centroMarkers = [];
+let routeLayers = [];
+
+/* ============================
+   UI helpers
+   ============================ */
+const statusEl = document.getElementById('status');
+function setStatus(text, busy=false){
+  statusEl.innerHTML = busy ? `<span class="loader" style="vertical-align:middle;margin-right:8px"></span>${text}` : text;
+}
+
+/* ============================
+   Geocode user input (Nominatim)
+   ============================ */
+async function geocodeLocalidad(q){
+  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q + ', Buenos Aires, Argentina')}&limit=1`;
+  const r = await fetch(url, { headers:{ 'Accept-Language':'es' }});
+  if (!r.ok) throw new Error('Error geocoding');
+  const j = await r.json();
+  if (!j || j.length === 0) return null;
+  return { lat: parseFloat(j[0].lat), lon: parseFloat(j[0].lon), display_name: j[0].display_name };
+}
+
+/* ============================
+   OSRM: pedir duración para un par (overview=false -> rápido)
+   ============================ */
+async function osrmDuration(origin, dest){
+  const url = `${OSRM_BASE}/route/v1/driving/${origin.lon},${origin.lat};${dest.lon},${dest.lat}?overview=false`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('OSRM error: ' + r.status);
+  const j = await r.json();
+  if (!j.routes || !j.routes[0]) throw new Error('OSRM no route');
+  return { duration_s: j.routes[0].duration, distance_m: j.routes[0].distance };
+}
+
+/* ============================
+   OSRM: pedir geojson para trazar ruta (solo para top2)
+   ============================ */
+async function osrmRouteGeoJson(origin, dest){
+  const url = `${OSRM_BASE}/route/v1/driving/${origin.lon},${origin.lat};${dest.lon},${dest.lat}?overview=full&geometries=geojson`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('OSRM error: ' + r.status);
+  const j = await r.json();
+  if (!j.routes || !j.routes[0]) throw new Error('OSRM no route');
+  return j.routes[0].geometry;
+}
+
+/* ============================
+   Dibujar resultados en mapa y tarjetas
+   ============================ */
+function clearMapGraphics(){
+  if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
+  centroMarkers.forEach(m => map.removeLayer(m)); centroMarkers = [];
+  routeLayers.forEach(l => map.removeLayer(l)); routeLayers = [];
+}
+
+function renderCardsAndMap(sortedList, userLat, userLon, withRoutesGeojson={first:null,second:null}){
+  const first = sortedList[0];
+  const second = sortedList[1];
+
+  // tarjetas
+  const firstCard = document.getElementById('firstCard');
+  const secondCard = document.getElementById('secondCard');
+
+  firstCard.innerHTML = `<h4>${first.label}</h4>
+    <div class="muted">${first.addr}</div>
+    <div style="margin-top:8px"><strong>${ (first.duration_min? first.duration_min.toFixed(0)+' min' : (first.distance_km? first.distance_km.toFixed(2)+' km' : '—')) }</strong></div>
+    <div class="muted" style="margin-top:6px">${ first.distance_km ? first.distance_km.toFixed(2) + ' km (ruta)' : '' }</div>`;
+  firstCard.classList.add('visible');
+
+  if (second){
+    secondCard.innerHTML = `<h4>${second.label}</h4>
+      <div class="muted">${second.addr}</div>
+      <div style="margin-top:8px"><strong>${ (second.duration_min? second.duration_min.toFixed(0)+' min' : (second.distance_km? second.distance_km.toFixed(2)+' km' : '—')) }</strong></div>
+      <div class="muted" style="margin-top:6px">${ second.distance_km ? second.distance_km.toFixed(2) + ' km (ruta)' : '' }</div>`;
+    secondCard.classList.add('visible');
+  } else {
+    secondCard.innerHTML = ''; secondCard.classList.remove('visible');
   }
 
-  async function calcularTiempo(origen, destino) {
-    const url = `https://router.project-osrm.org/route/v1/driving/${origen.lon},${origen.lat};${destino.lon},${destino.lat}?overview=false`;
+  // mapa
+  clearMapGraphics();
+  userMarker = L.marker([userLat, userLon]).addTo(map).bindPopup('Localidad buscada').openPopup();
 
-    const res = await fetch(url);
-    const data = await res.json();
-
-    return {
-      distancia: data.routes[0].distance / 1000,     // km
-      duracion: data.routes[0].duration / 60         // minutos
-    };
-  }
-
-  async function buscarCentro() {
-    const localidad = document.getElementById("localidad").value.trim();
-    if (!localidad) return;
-
-    // Buscar coordenadas de la localidad
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${localidad} Buenos Aires Argentina`);
-    const data = await res.json();
-
-    if (data.length === 0) {
-      alert("No se encontró la localidad.");
-      return;
-    }
-
-    const origen = { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
-
-    let tiempos = [];
-
-    for (let c of centros) {
-      const info = await calcularTiempo(origen, c);
-      tiempos.push({ centro:c, ...info });
-    }
-
-    // Ordenar por duración de viaje
-    tiempos.sort((a,b) => a.duracion - b.duracion);
-
-    const primero = tiempos[0];
-    const segundo = tiempos[1];
-
-    document.getElementById("resultado-card").style.display = "block";
-    setTimeout(() => {
-      document.getElementById("resultado-card").style.opacity = "1";
-      document.getElementById("resultado-card").style.transform = "translateY(0)";
-    }, 10);
-
-    document.getElementById("resultado").innerHTML = `
-      <b>Centro más cercano:</b><br>
-      ${primero.centro.nombre}<br>
-      <b>Dirección:</b> ${primero.centro.direccion}<br>
-      <b>Tiempo:</b> ${primero.duracion.toFixed(1)} min<br>
-      <b>Distancia:</b> ${primero.distancia.toFixed(1)} km<br><br>
-
-      <b>Segundo centro más cercano:</b><br>
-      ${segundo.centro.nombre}<br>
-      <b>Dirección:</b> ${segundo.centro.direccion}<br>
-      <b>Tiempo:</b> ${segundo.duracion.toFixed(1)} min<br>
-      <b>Distancia:</b> ${segundo.distancia.toFixed(1)} km
-    `;
-
-    // Dibujar ruta hacia el centro más cercano
-    trazarRuta(origen, primero.centro);
-  }
-
-  document.getElementById("localidad").addEventListener("keypress", e => {
-    if (e.key === "Enter") buscarCentro();
+  // marcar primero y segundo
+  [first, second].forEach((c, idx) => {
+    if (!c) return;
+    const m = L.marker([c.lat, c.lon]).addTo(map).bindPopup(`<b>${c.label}</b><br>${c.addr}`);
+    centroMarkers.push(m);
   });
-</script>
 
+  // si tenemos geometrías de rutas (geojson) las dibujamos; sino dibujamos líneas rectas
+  if (withRoutesGeojson.first){
+    const g1 = L.geoJSON(withRoutesGeojson.first, { style:{ color:'#0c3b2e', weight:5, opacity:0.9 } }).addTo(map);
+    routeLayers.push(g1);
+  } else if (first) {
+    const l = L.polyline([[userLat,userLon],[first.lat, first.lon]], { color:'#0c3b2e', weight:3, dashArray:'6 6' }).addTo(map); routeLayers.push(l);
+  }
+
+  if (withRoutesGeojson.second){
+    const g2 = L.geoJSON(withRoutesGeojson.second, { style:{ color:'#1f7fb0', weight:4, opacity:0.9 } }).addTo(map);
+    routeLayers.push(g2);
+  } else if (second){
+    const l2 = L.polyline([[userLat,userLon],[second.lat, second.lon]], { color:'#1f7fb0', weight:3, dashArray:'6 6' }).addTo(map); routeLayers.push(l2);
+  }
+
+  // ajustar vista
+  const bounds = L.latLngBounds([[userLat,userLon],[first.lat, first.lon]]);
+  if (second) bounds.extend([second.lat, second.lon]);
+  map.fitBounds(bounds.pad(0.25));
+}
+
+/* ============================
+   Búsqueda principal (optimizada)
+   ============================ */
+async function handleSearch(){
+  const q = document.getElementById('localidad').value.trim();
+  if (!q) { alert('Ingresá una localidad'); return; }
+
+  setStatus('Buscando localidad...', true);
+
+  // cache key (simple)
+  const cacheKey = q.toLowerCase();
+
+  // check cache
+  if (CACHE.has(cacheKey)){
+    const cached = CACHE.get(cacheKey);
+    renderCardsAndMap(cached.sorted, cached.user.lat, cached.user.lon, cached.geojson || {});
+    setStatus('Resultado (cache) listo');
+    return;
+  }
+
+  // 1) geocode
+  let geo;
+  try {
+    geo = await geocodeLocalidad(q);
+    if (!geo) { alert('No se encontró la localidad. Probá otra variación.'); setStatus('Localidad no encontrada'); return; }
+  } catch(e){
+    console.error(e);
+    alert('Error al geocodificar la localidad. Intentá de nuevo.');
+    setStatus('Error geocoding');
+    return;
+  }
+
+  setStatus('Calculando tiempos (rápido)...', true);
+
+  // 2) obtener duración a cada centro EN PARALELO (overview=false -> rápido)
+  // preparar promesas
+  const origin = { lat: geo.lat, lon: geo.lon };
+
+  // lanzar promesas en paralelo
+  const promises = CENTROS.map(c => (
+    osrmDuration(origin, { lat:c.lat, lon:c.lon })
+      .then(res => ({ id:c.id, label:c.label, lat:c.lat, lon:c.lon, addr:c.addr, duration_s: res.duration_s, distance_m: res.distance_m }))
+      .catch(err => {
+        // fallback: usar haversine distance (convertir a "duration" con velocidad estimada 50 km/h)
+        console.warn('OSRM fallo para', c.label, err.message);
+        const d_km = haversineKm(origin.lat, origin.lon, c.lat, c.lon);
+        const duration_s = (d_km / 50) * 3600; // suposición 50 km/h
+        return { id:c.id, label:c.label, lat:c.lat, lon:c.lon, addr:c.addr, duration_s, distance_m: d_km*1000, fallback:true };
+      })
+  ));
+
+  let results;
+  try {
+    results = await Promise.all(promises); // paralelo
+  } catch(e){
+    console.warn('Error en promesas OSRM', e);
+    alert('Error al consultar tiempos. Intentá de nuevo.');
+    setStatus('Error al calcular tiempos');
+    return;
+  }
+
+  // mapear a formato usado y ordenar por duration
+  const list = results.map(r => ({
+    ...r,
+    duration_min: r.duration_s/60,
+    distance_km: r.distance_m ? r.distance_m/1000 : haversineKm(origin.lat, origin.lon, r.lat, r.lon)
+  }));
+  list.sort((a,b) => a.duration_min - b.duration_min);
+
+  setStatus('Obteniendo rutas para los 2 primeros (optimizado)...', true);
+
+  // 3) pedir geometrías solo para los top2 (overview=full)
+  let geojsonFirst = null, geojsonSecond = null;
+  try {
+    if (list[0]) {
+      geojsonFirst = await osrmRouteGeoJson(origin, { lat:list[0].lat, lon:list[0].lon });
+    }
+    if (list[1]) {
+      geojsonSecond = await osrmRouteGeoJson(origin, { lat:list[1].lat, lon:list[1].lon });
+    }
+  } catch(e){
+    console.warn('Error obteniendo geojson (OK fallback):', e.message);
+    // no abortamos; fallback a líneas rectas
+    geojsonFirst = geojsonFirst || null;
+    geojsonSecond = geojsonSecond || null;
+  }
+
+  // 4) preparar sorted list con durations en minutos
+  const sorted = list.map(x => ({ ...x, duration_min: x.duration_s/60 }));
+
+  // guardar en cache
+  CACHE.set(cacheKey, { user:origin, sorted, geojson: { first: geojsonFirst, second: geojsonSecond } });
+
+  // 5) renderizar
+  renderCardsAndMap(sorted, origin.lat, origin.lon, { first: geojsonFirst, second: geojsonSecond });
+
+  setStatus('Resultado listo');
+}
+
+/* ============================
+   EVENTS
+   ============================ */
+document.getElementById('buscarBtn').addEventListener('click', handleSearch);
+document.getElementById('limpiarBtn').addEventListener('click', ()=>{
+  document.getElementById('localidad').value = '';
+  document.getElementById('firstCard').classList.remove('visible');
+  document.getElementById('secondCard').classList.remove('visible');
+  setStatus('Listo');
+  clearMapGraphics();
+});
+document.getElementById('localidad').addEventListener('keypress', e => { if (e.key === 'Enter') handleSearch(); });
+
+/* foco input */
+window.addEventListener('load', ()=> setTimeout(()=> document.getElementById('localidad').focus(), 300));
+
+</script>
 </body>
 </html>
