@@ -77,7 +77,7 @@
 <body>
 
 <header>
-  <img src="https://www.universidadsiglo21.edu.ar/themes/custom/us21/logo.svg" alt="Siglo 21" onerror="this.style.display='none'">
+    <img src="https://siglo21.edu.ar/wp-content/uploads/2023/10/logo-horizontal-us21.svg" alt="Siglo 21">
   <h1>Buscador de Centros Siglo 21 — Tiempo de viaje</h1>
 </header>
 
@@ -125,9 +125,9 @@ const CENTROS = [
   { id:'banfield', label:'Cau Banfield', lat:-34.74188, lon:-58.39118, addr:'Vieytes 211, Banfield' }
 ];
 
-const OSRM_BASE = 'https://router.project-osrm.org'; // public OSRM server
+const OSRM_BASE = 'https://router.project-osrm.org'; 
 
-// --- MODIFICACIÓN: CACHE PERSISTENTE ---
+// --- CACHE PERSISTENTE ---
 const CACHE_KEY = 'localidad_cache'; 
 
 // Inicializa la caché desde localStorage
@@ -135,7 +135,6 @@ let CACHE = new Map();
 try {
   const cachedData = localStorage.getItem(CACHE_KEY);
   if (cachedData) {
-    // Convierte el JSON (string) a Map
     CACHE = new Map(JSON.parse(cachedData));
     console.log(`✅ Cache cargada desde localStorage con ${CACHE.size} elementos.`);
   }
@@ -401,7 +400,6 @@ document.getElementById('limpiarBtn').addEventListener('click', ()=>{
   document.getElementById('secondCard').classList.remove('visible');
   setStatus('Listo');
   clearMapGraphics();
-  // NOTA: Se mantiene la limpieza solo visual (no borra localStorage, como solicitaste)
 });
 document.getElementById('localidad').addEventListener('keypress', e => { if (e.key === 'Enter') handleSearch(); });
 
@@ -415,7 +413,6 @@ window.addEventListener('load', ()=> {
     // 2. Intentar cargar el último resultado si la cache NO está vacía
     if (CACHE.size > 0) {
         // Obtenemos la última clave (asumiendo que es la última entrada del Map)
-        // Esto funciona bien si el Map se inicializó correctamente desde el array de localStorage
         const lastCacheEntry = Array.from(CACHE.keys()).pop(); 
         
         if (lastCacheEntry) {
@@ -429,7 +426,6 @@ window.addEventListener('load', ()=> {
         }
     }
 });
-
 </script>
 </body>
 </html>
