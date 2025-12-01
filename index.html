@@ -128,19 +128,19 @@ const CENTROS = [
 const OSRM_BASE = 'https://router.project-osrm.org'; // public OSRM server
 
 // --- MODIFICACIÓN: CACHE PERSISTENTE ---
-const CACHE_KEY = 'localidad_cache'; // Clave para localStorage
+const CACHE_KEY = 'localidad_cache'; 
 
 // Inicializa la caché desde localStorage
-let CACHE;
+let CACHE = new Map();
 try {
-  const cachedData = localStorage.getItem(CACHE_KEY);
-  // localStorage solo guarda strings, asi que usamos JSON.parse
-  // Convertimos el array de arrays de nuevo a Map
-  CACHE = cachedData ? new Map(JSON.parse(cachedData)) : new Map();
-  console.log(`Cache inicializada con ${CACHE.size} elementos.`);
+  const cachedData = localStorage.getItem(CACHE_KEY);
+  if (cachedData) {
+    // Convierte el JSON (string) a Map
+    CACHE = new Map(JSON.parse(cachedData));
+    console.log(`✅ Cache cargada desde localStorage con ${CACHE.size} elementos.`);
+  }
 } catch(e) {
-  console.error("Error al leer cache de localStorage:", e);
-  CACHE = new Map();
+  console.error("❌ Error al leer o parsear cache de localStorage:", e);
 }
 // ----------------------------------------
 
@@ -157,16 +157,15 @@ function haversineKm(lat1, lon1, lat2, lon2){
 }
 
 /* ============================
-   UTIL: Almacenamiento (NUEVO)
+   UTIL: Almacenamiento
    ============================ */
 // Funcion para guardar el Map en localStorage
 function saveCacheToLocalStorage(){
-  try {
-    // Los Maps no se guardan directamente, hay que convertirlos a Array de arrays para JSON
-    localStorage.setItem(CACHE_KEY, JSON.stringify(Array.from(CACHE.entries())));
-  } catch(e) {
-    console.error("Error al guardar cache en localStorage:", e);
-  }
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(Array.from(CACHE.entries())));
+  } catch(e) {
+    console.error("Error al guardar cache en localStorage:", e);
+  }
 }
 // ----------------------------------------
 
@@ -382,10 +381,9 @@ async function handleSearch(){
 
   // guardar en cache
   CACHE.set(cacheKey, { user:origin, sorted, geojson: { first: geojsonFirst, second: geojsonSecond } });
-  
-  // --- MODIFICACIÓN: GUARDAR CACHE EN LOCAL STORAGE ---
-  saveCacheToLocalStorage();
-  // ---------------------------------------------------
+  
+  // GUARDAR CACHE EN LOCAL STORAGE
+  saveCacheToLocalStorage();
 
   // 5) renderizar
   renderCardsAndMap(sorted, origin.lat, origin.lon, { first: geojsonFirst, second: geojsonSecond });
@@ -403,11 +401,34 @@ document.getElementById('limpiarBtn').addEventListener('click', ()=>{
   document.getElementById('secondCard').classList.remove('visible');
   setStatus('Listo');
   clearMapGraphics();
+  // NOTA: Se mantiene la limpieza solo visual (no borra localStorage, como solicitaste)
 });
 document.getElementById('localidad').addEventListener('keypress', e => { if (e.key === 'Enter') handleSearch(); });
 
-/* foco input */
-window.addEventListener('load', ()=> setTimeout(()=> document.getElementById('localidad').focus(), 300));
+/* foco input y carga de último resultado (MEJORA UX) */
+window.addEventListener('load', ()=> {
+    const localidadInput = document.getElementById('localidad');
+    
+    // 1. Dar foco al input
+    setTimeout(()=> localidadInput.focus(), 300);
+
+    // 2. Intentar cargar el último resultado si la cache NO está vacía
+    if (CACHE.size > 0) {
+        // Obtenemos la última clave (asumiendo que es la última entrada del Map)
+        // Esto funciona bien si el Map se inicializó correctamente desde el array de localStorage
+        const lastCacheEntry = Array.from(CACHE.keys()).pop(); 
+        
+        if (lastCacheEntry) {
+            localidadInput.value = lastCacheEntry;
+            
+            const cached = CACHE.get(lastCacheEntry);
+            if (cached) {
+                renderCardsAndMap(cached.sorted, cached.user.lat, cached.user.lon, cached.geojson || {});
+                setStatus('Resultado anterior cargado desde caché');
+            }
+        }
+    }
+});
 
 </script>
 </body>
