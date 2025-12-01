@@ -1,253 +1,313 @@
-<!DOCTYPE html>
-<html lang="es">
+<script>
 
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Buscador de Centros Siglo 21</title>
+/* ============================ CONFIG & DATA ============================ */
+const CENTROS = [
+  { id:'san_miguel', label:'Cau San Miguel', lat:-34.54313, lon:-58.71267, addr:'Av. León Gallardo 207, Muñiz' },
+  { id:'don_torcuato', label:'Cau Don Torcuato', lat:-34.47175, lon:-58.63324, addr:'Av. Ángel T. de Alvear 2555, Don Torcuato' },
+  { id:'hurlingham', label:'Cau Hurlingham', lat:-34.58626, lon:-58.63928, addr:'Arturo Jauretche 1435, Hurlingham' },
+  { id:'canuelas', label:'Cau Cañuelas', lat:-35.0526, lon:-58.7541, addr:'Av. Libertad 1200, Cañuelas' },
+  { id:'san_martin', label:'Cau San Martín', lat:-34.56873, lon:-58.5416, addr:'Sarmiento 1887, San Martín' },
+  { id:'parque_leloir', label:'Cau Parque Leloir', lat:-34.63310, lon:-58.68760, addr:'Av. Martín Fierro 3246, Villa Udaondo' },
+  { id:'munro', label:'Cau Munro', lat:-34.53050, lon:-58.52190, addr:'Vélez Sársfield 4898, Munro' },
+  { id:'merlo', label:'Cau Merlo', lat:-34.66930, lon:-58.72910, addr:'Avellaneda 673, Merlo' },
+  { id:'banfield', label:'Cau Banfield', lat:-34.74188, lon:-58.39118, addr:'Vieytes 211, Banfield' }
+];
 
-  <style>
-    :root {
-      --verde21: #0c3b2e;
-      --verde21-light: #105c47;
-      --fondo: #f5f5f5;
+const OSRM_BASE = 'https://router.project-osrm.org';
+const CACHE = new Map();
+
+/* ============================ CACHE PERMANENTE ============================ */
+
+// Guardar en almacenamiento permanente del navegador
+function saveToPermanentCache(key, data){
+  try {
+    localStorage.setItem("rutas_cache_" + key, JSON.stringify(data));
+  } catch(e){ console.warn("No se pudo guardar en localStorage", e); }
+}
+
+// Cargar del almacenamiento permanente
+function loadFromPermanentCache(key){
+  try {
+    const raw = localStorage.getItem("rutas_cache_" + key);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch(e){
+    console.warn("No se pudo leer localStorage", e);
+    return null;
+  }
+}
+
+
+/* ============================ UTIL: Haversine (km) ============================ */
+function haversineKm(lat1, lon1, lat2, lon2){
+  const R = 6371;
+  const dLat = (lat2-lat1)*Math.PI/180;
+  const dLon = (lon2-lon1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 +
+    Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180) *
+    Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+/* ============================ MAP Init ============================ */
+const map = L.map('map', { preferCanvas:true }).setView([-34.65, -58.5], 10);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19 }).addTo(map);
+
+let userMarker = null;
+let centroMarkers = [];
+let routeLayers = [];
+
+/* ============================ UI helpers ============================ */
+const statusEl = document.getElementById('status');
+function setStatus(text, busy=false){
+  statusEl.innerHTML = busy
+    ? `<span class="loader" style="vertical-align:middle;margin-right:8px"></span>${text}`
+    : text;
+}
+
+/* ============================ Geocode user input ============================ */
+async function geocodeLocalidad(q){
+  const url =
+    `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q + ', Buenos Aires, Argentina')}&limit=1`;
+  const r = await fetch(url, { headers:{ 'Accept-Language':'es' }});
+  if (!r.ok) throw new Error('Error geocoding');
+  const j = await r.json();
+  if (!j || j.length === 0) return null;
+
+  return {
+    lat: parseFloat(j[0].lat),
+    lon: parseFloat(j[0].lon),
+    display_name: j[0].display_name
+  };
+}
+
+/* ============================ OSRM: durations ============================ */
+async function osrmDuration(origin, dest){
+  const url =
+    `${OSRM_BASE}/route/v1/driving/${origin.lon},${origin.lat};${dest.lon},${dest.lat}?overview=false`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('OSRM error: ' + r.status);
+  const j = await r.json();
+  if (!j.routes || !j.routes[0]) throw new Error('OSRM no route');
+  return {
+    duration_s: j.routes[0].duration,
+    distance_m: j.routes[0].distance
+  };
+}
+
+/* ============================ OSRM: full route for drawing ============================ */
+async function osrmRouteGeoJson(origin, dest){
+  const url =
+    `${OSRM_BASE}/route/v1/driving/${origin.lon},${origin.lat};${dest.lon},${dest.lat}?overview=full&geometries=geojson`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('OSRM error: ' + r.status);
+  const j = await r.json();
+  if (!j.routes || !j.routes[0]) throw new Error('OSRM no route');
+  return j.routes[0].geometry;
+}
+
+/* ============================ Drawing ============================ */
+function clearMapGraphics(){
+  if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
+  centroMarkers.forEach(m => map.removeLayer(m));
+  centroMarkers = [];
+  routeLayers.forEach(l => map.removeLayer(l));
+  routeLayers = [];
+}
+
+function renderCardsAndMap(sortedList, userLat, userLon, withRoutesGeojson={first:null,second:null}){
+  const first = sortedList[0];
+  const second = sortedList[1];
+
+  const firstCard = document.getElementById('firstCard');
+  const secondCard = document.getElementById('secondCard');
+
+  firstCard.innerHTML = `
+    <h4>${first.label}</h4>
+    <div class="muted">${first.addr}</div>
+    <div style="margin-top:8px"><strong>${
+      first.duration_min ? first.duration_min.toFixed(0)+' min'
+                         : first.distance_km.toFixed(2)+' km'
+    }</strong></div>
+    <div class="muted" style="margin-top:6px">${
+      first.distance_km ? first.distance_km.toFixed(2)+' km (ruta)' : ''
+    }</div>`;
+  firstCard.classList.add('visible');
+
+  if (second){
+    secondCard.innerHTML = `
+      <h4>${second.label}</h4>
+      <div class="muted">${second.addr}</div>
+      <div style="margin-top:8px"><strong>${
+        second.duration_min ? second.duration_min.toFixed(0)+' min'
+                            : second.distance_km.toFixed(2)+' km'
+      }</strong></div>
+      <div class="muted" style="margin-top:6px">${
+        second.distance_km ? second.distance_km.toFixed(2)+' km (ruta)' : ''
+      }</div>`;
+    secondCard.classList.add('visible');
+  } else {
+    secondCard.innerHTML = '';
+    secondCard.classList.remove('visible');
+  }
+
+  clearMapGraphics();
+
+  userMarker = L.marker([userLat, userLon])
+    .addTo(map).bindPopup('Localidad buscada').openPopup();
+
+  [first, second].forEach(c => {
+    if (!c) return;
+    const m = L.marker([c.lat, c.lon])
+      .addTo(map).bindPopup(`<b>${c.label}</b><br>${c.addr}`);
+    centroMarkers.push(m);
+  });
+
+  if (withRoutesGeojson.first){
+    const g1 = L.geoJSON(withRoutesGeojson.first, {
+      style:{ color:'#0c3b2e', weight:5, opacity:0.9 }
+    }).addTo(map);
+    routeLayers.push(g1);
+  }
+
+  if (withRoutesGeojson.second){
+    const g2 = L.geoJSON(withRoutesGeojson.second, {
+      style:{ color:'#1f7fb0', weight:4, opacity:0.9 }
+    }).addTo(map);
+    routeLayers.push(g2);
+  }
+
+  const bounds = L.latLngBounds([[userLat,userLon],[first.lat, first.lon]]);
+  if (second) bounds.extend([second.lat, second.lon]);
+  map.fitBounds(bounds.pad(0.25));
+}
+
+/* ============================ MAIN SEARCH ============================ */
+async function handleSearch(){
+  const q = document.getElementById('localidad').value.trim();
+  if (!q){ alert('Ingresá una localidad'); return; }
+
+  setStatus('Buscando localidad...', true);
+
+  const cacheKey = q.toLowerCase();
+
+  /* === CACHE RAM (inmediato) === */
+  if (CACHE.has(cacheKey)){
+    const cached = CACHE.get(cacheKey);
+    renderCardsAndMap(cached.sorted, cached.user.lat, cached.user.lon, cached.geojson || {});
+    setStatus('Resultado (cache en memoria) listo');
+    return;
+  }
+
+  /* === CACHE PERMANENTE (localStorage) === */
+  const perm = loadFromPermanentCache(cacheKey);
+  if (perm){
+    CACHE.set(cacheKey, perm); // lo pasamos a RAM
+    renderCardsAndMap(perm.sorted, perm.user.lat, perm.user.lon, perm.geojson || {});
+    setStatus('Resultado (cache permanente) listo');
+    return;
+  }
+
+  /* === NO CACHE → calcular === */
+  let geo;
+  try {
+    geo = await geocodeLocalidad(q);
+    if (!geo){
+      alert('No se encontró la localidad.');
+      setStatus('Localidad no encontrada');
+      return;
     }
+  } catch(e){
+    alert('Error geocodificando');
+    return;
+  }
 
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      background: var(--fondo);
-      text-align: center;
-    }
+  setStatus('Calculando tiempos...', true);
 
-    header {
-      background: var(--verde21);
-      padding: 22px;
-      color: white;
-      font-size: 24px;
-      font-weight: bold;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
+  const origin = { lat: geo.lat, lon: geo.lon };
 
-    h2 {
-      color: var(--verde21);
-    }
+  const promises = CENTROS.map(c =>
+    osrmDuration(origin, { lat:c.lat, lon:c.lon })
+      .then(res => ({
+        id:c.id,
+        label:c.label,
+        lat:c.lat,
+        lon:c.lon,
+        addr:c.addr,
+        duration_s: res.duration_s,
+        distance_m: res.distance_m
+      }))
+      .catch(() => {
+        const d_km = haversineKm(origin.lat, origin.lon, c.lat, c.lon);
+        const duration_s = (d_km/50)*3600;
+        return {
+          id:c.id,
+          label:c.label,
+          lat:c.lat,
+          lon:c.lon,
+          addr:c.addr,
+          duration_s,
+          distance_m: d_km*1000,
+          fallback:true
+        };
+      })
+  );
 
-    .card {
-      background: white;
-      width: 90%;
-      max-width: 550px;
-      margin: 25px auto;
-      padding: 25px;
-      border-radius: 18px;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
-    }
+  let results;
+  try { results = await Promise.all(promises); }
+  catch(e){ alert('Error consultando rutas'); return; }
 
-    input {
-      width: 90%;
-      padding: 12px;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-      font-size: 16px;
-      margin-bottom: 10px;
-    }
+  const list = results.map(r => ({
+    ...r,
+    duration_min: r.duration_s / 60,
+    distance_km: r.distance_m/1000
+  }));
 
-    button {
-      background: var(--verde21);
-      color: white;
-      border: none;
-      padding: 12px 22px;
-      font-size: 16px;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: 0.3s;
-    }
+  list.sort((a,b) => a.duration_min - b.duration_min);
 
-    button:hover {
-      background: var(--verde21-light);
-    }
+  setStatus('Obteniendo rutas principales...', true);
 
-    #resultado-card {
-      display: none;
-      background: white;
-      width: 90%;
-      max-width: 650px;
-      margin: 30px auto;
-      padding: 20px;
-      border-radius: 15px;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-      opacity: 0;
-      transform: translateY(10px);
-      transition: all 0.35s ease;
-      text-align: left;
-      border-left: 8px solid var(--verde21);
-    }
+  let geojsonFirst = null, geojsonSecond = null;
+  try {
+    if (list[0]) geojsonFirst = await osrmRouteGeoJson(origin, list[0]);
+    if (list[1]) geojsonSecond = await osrmRouteGeoJson(origin, list[1]);
+  } catch(e){}
 
-    .centro {
-      margin-bottom: 15px;
-      padding: 10px;
-      border-radius: 10px;
-      background: #f0f7f5;
-      border-left: 4px solid var(--verde21);
-    }
+  const sorted = list.map(x => ({ ...x, duration_min: x.duration_s/60 }));
 
-    .mapa {
-      width: 100%;
-      border-radius: 12px;
-      margin-top: 15px;
-    }
-  </style>
-</head>
+  /* === GUARDAR EN CACHE (RAM + permanente) === */
+  const dataToSave = {
+    user:origin,
+    sorted,
+    geojson:{ first:geojsonFirst, second:geojsonSecond }
+  };
 
-<body>
+  CACHE.set(cacheKey, dataToSave);
+  saveToPermanentCache(cacheKey, dataToSave);
 
-  <header>Buscador de Centros Siglo 21</header>
+  renderCardsAndMap(sorted, origin.lat, origin.lon, {
+    first: geojsonFirst,
+    second: geojsonSecond
+  });
 
-  <div class="card">
-    <h2>Ingresá tu localidad</h2>
-    <input id="localidad" placeholder="Ej: Virrey del Pino, San Miguel, etc..." />
-    <button onclick="buscarCentro()">Buscar centro</button>
-    <p id="estado" style="color:gray; font-size:14px;"></p>
-  </div>
+  setStatus('Resultado listo');
+}
 
-  <div id="resultado-card">
-    <h2>📍 Resultado</h2>
-    <div id="resultado"></div>
-    <img id="mapa" class="mapa" src="" alt="Mapa de ruta" />
-  </div>
+/* ============================ EVENTS ============================ */
+document.getElementById('buscarBtn').addEventListener('click', handleSearch);
+document.getElementById('limpiarBtn').addEventListener('click', ()=>{
+  document.getElementById('localidad').value = '';
+  document.getElementById('firstCard').classList.remove('visible');
+  document.getElementById('secondCard').classList.remove('visible');
+  setStatus('Listo');
+  clearMapGraphics();
+});
+document.getElementById('localidad').addEventListener('keypress', e =>{
+  if (e.key === 'Enter') handleSearch();
+});
 
-  <script>
-    /* ============================================
-       CENTROS - CON COORDENADAS DE GOOGLE MAPS
-       ============================================ */
-    const centros = [
-      { nombre: "San Miguel", dir: "Av. León Gallardo 207, San Miguel", lat: -34.54313, lon: -58.71267 },
-      { nombre: "Don Torcuato", dir: "Ángel T. de Alvear 2555, Don Torcuato", lat: -34.47175, lon: -58.63324 },
-      { nombre: "Hurlingham", dir: "Arturo Jauretche 1435, Hurlingham", lat: -34.58626, lon: -58.63928 },
-      { nombre: "Cañuelas", dir: "Libertad 1200, Cañuelas", lat: -35.0526, lon: -58.7541 },
-      { nombre: "San Martín", dir: "Sarmiento 1887, San Martín", lat: -34.56873, lon: -58.5416 },
-      { nombre: "Parque Leloir", dir: "Martín Fierro 3246, Parque Leloir", lat: -34.6331, lon: -58.6876 },
-      { nombre: "Munro", dir: "Vélez Sarsfield 4898, Munro", lat: -34.5305, lon: -58.5219 },
-      { nombre: "Merlo", dir: "Avellaneda 673, Merlo", lat: -34.6693, lon: -58.7291 },
-      { nombre: "Banfield", dir: "Vieytes 211, Banfield", lat: -34.74188, lon: -58.39118 }
-    ];
+window.addEventListener('load', ()=> setTimeout(()=>{
+  document.getElementById('localidad').focus();
+}, 300));
 
-    /* ============================================
-       HAVERSINE PARA DISTANCIA REAL
-       ============================================ */
-    function haversine(lat1, lon1, lat2, lon2) {
-      const R = 6371;
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos(lat1 * Math.PI / 180) *
-        Math.cos(lat2 * Math.PI / 180) *
-        Math.sin(dLon / 2) ** 2;
-      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    }
-
-    /* ============================================
-       CARGAR DESDE CACHE PARA ACELERAR
-       ============================================ */
-    const cache = JSON.parse(localStorage.getItem("cacheRutas") || "{}");
-
-    /* ============================================
-       BUSCAR CENTROS
-       ============================================ */
-    function buscarCentro() {
-      const loc = document.getElementById("localidad").value.trim();
-      const estado = document.getElementById("estado");
-      if (!loc) return;
-
-      estado.textContent = "Buscando ubicación…";
-
-      // Si ya está en caché → carga instantánea
-      if (cache[loc]) {
-        mostrarResultado(cache[loc]);
-        estado.textContent = "Resultado cargado desde caché ✔️";
-        return;
-      }
-
-      fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${loc} Buenos Aires Argentina`)
-        .then(r => r.json())
-        .then(data => {
-          if (data.length === 0) {
-            estado.textContent = "No se encontró la localidad.";
-            return;
-          }
-
-          const userLat = parseFloat(data[0].lat);
-          const userLon = parseFloat(data[0].lon);
-
-          // Calculamos distancias reales
-          const distancias = centros.map(c => ({
-            ...c,
-            dist: haversine(userLat, userLon, c.lat, c.lon)
-          }));
-
-          // Ordenar del más cercano al más lejano
-          distancias.sort((a, b) => a.dist - b.dist);
-
-          const resultado = {
-            localidad: loc,
-            origen: { lat: userLat, lon: userLon },
-            primero: distancias[0],
-            segundo: distancias[1]
-          };
-
-          // Guardamos en caché
-          cache[loc] = resultado;
-          localStorage.setItem("cacheRutas", JSON.stringify(cache));
-
-          mostrarResultado(resultado);
-          estado.textContent = "";
-        });
-    }
-
-    /* ============================================
-       MOSTRAR RESULTADO + MAPA
-       ============================================ */
-    function mostrarResultado(res) {
-      const card = document.getElementById("resultado-card");
-      const cont = document.getElementById("resultado");
-      const mapa = document.getElementById("mapa");
-
-      card.style.display = "block";
-      setTimeout(() => {
-        card.style.opacity = "1";
-        card.style.transform = "translateY(0)";
-      }, 30);
-
-      cont.innerHTML = `
-      <div class="centro">
-        <b>Centro más cercano:</b> ${res.primero.nombre}<br>
-        <b>Dirección:</b> ${res.primero.dir}<br>
-        <b>Distancia:</b> ${res.primero.dist.toFixed(2)} km<br>
-      </div>
-
-      <div class="centro">
-        <b>Segundo centro más cercano:</b> ${res.segundo.nombre}<br>
-        <b>Dirección:</b> ${res.segundo.dir}<br>
-        <b>Distancia:</b> ${res.segundo.dist.toFixed(2)} km
-      </div>
-    `;
-
-      // MAPA ESTÁTICO SIN API KEY (casi-ruta)
-      mapa.src =
-        `https://staticmap.openstreetmap.de/staticmap.php?center=${res.origen.lat},${res.origen.lon}` +
-        `&zoom=11&size=600x350&maptype=mapnik` +
-        `&markers=${res.origen.lat},${res.origen.lon},lightblue1` +
-        `|${res.primero.lat},${res.primero.lon},darkgreen1`;
-    }
-
-    // ENTER para buscar
-    document.getElementById("localidad").addEventListener("keypress", e => {
-      if (e.key === "Enter") buscarCentro();
-    });
-  </script>
-</body>
-
-</html>
+</script>
