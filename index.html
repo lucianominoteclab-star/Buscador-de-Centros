@@ -1,267 +1,223 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Buscador de Centros Siglo 21</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Buscador de Centros Siglo 21</title>
 
-<!-- Styles: mezcla Landing (visual) + Corporativo Siglo21 -->
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --verde:#0c3b2e;
-    --verde-2:#105c47;
-    --bg:#f6f7f8;
-    --card:#ffffff;
-    --muted:#6b7280;
-    --accent:#1f7fb0;
-    --radius:12px;
-  }
-  *{box-sizing:border-box}
-  body{
-    font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-    margin:0; background:var(--bg); color:#0b1220;
-    -webkit-font-smoothing:antialiased;
-  }
+  <!-- Leaflet (MAPA) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
-  /* Header / Hero */
-  header{
-    background:linear-gradient(90deg,var(--verde) 0%, var(--verde-2) 100%);
-    color:white; padding:20px 18px; display:flex; align-items:center; gap:16px;
-  }
-  header img{height:40px}
-  header h1{font-size:18px; margin:0; font-weight:700}
+  <style>
+    :root {
+      --verde21: #0c3b2e;
+      --verde21-light: #105c47;
+    }
 
-  .container{max-width:1100px; margin:22px auto; padding:0 18px}
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+    }
 
-  .hero{
-    display:grid; grid-template-columns: 1fr 420px; gap:24px; align-items:start;
-  }
-  @media(max-width:980px){ .hero{grid-template-columns:1fr} }
+    header {
+      background-color: var(--verde21);
+      padding: 20px;
+      color: white;
+      font-size: 22px;
+      font-weight: bold;
+    }
 
-  .panel{
-    background:var(--card); border-radius:var(--radius); padding:22px; box-shadow:0 8px 28px rgba(12,19,24,0.06);
-  }
+    h1 {
+      margin-top: 25px;
+      color: var(--verde21);
+    }
 
-  .title{
-    margin:0 0 10px 0; color:var(--verde); font-size:22px; font-weight:700;
-  }
-  .lead{color:var(--muted); margin:0 0 18px 0}
+    .card {
+      background: white;
+      width: 90%;
+      max-width: 550px;
+      padding: 25px;
+      margin: 20px auto;
+      border-radius: 15px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    }
 
-  /* Search */
-  .searchRow{display:flex; gap:10px; align-items:center}
-  .searchRow input{
-    flex:1; padding:12px 14px; border-radius:10px; border:1px solid #e6e9ea; font-size:15px;
-    box-shadow:inset 0 1px 0 rgba(255,255,255,0.6)
-  }
-  .searchRow button{
-    background:var(--verde); color:white; border:none; padding:12px 16px; border-radius:10px; cursor:pointer;
-    font-weight:600; box-shadow:0 6px 18px rgba(12,19,24,0.08);
-  }
-  .searchRow button:hover{background:var(--verde-2)}
+    input {
+      width: 90%;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
 
-  .small{font-size:13px;color:var(--muted); margin-top:10px}
+    button {
+      background-color: var(--verde21);
+      color: white;
+      border: none;
+      padding: 12px 22px;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
 
-  /* Results area */
-  .results{
-    margin-top:16px; display:flex; gap:12px; align-items:stretch; flex-wrap:wrap;
-  }
-  .cardRes{
-    background:linear-gradient(180deg,#fff,#fbfffb); border-radius:10px; padding:14px; min-width:250px;
-    box-shadow:0 6px 18px rgba(12,19,24,0.04); border-left:6px solid var(--verde); flex:1;
-    transform:translateY(10px); opacity:0; transition: all .4s ease;
-  }
-  .cardRes.visible{transform:translateY(0); opacity:1}
-  .cardRes h4{margin:0 0 8px 0; font-size:16px; color:#062a20}
-  .muted{color:var(--muted); font-size:13px}
+    button:hover {
+      background-color: var(--verde21-light);
+    }
 
-  /* Map */
-  #map{height:420px; border-radius:10px; margin-top:18px; border:1px solid #e9eef0; overflow:hidden}
+    #resultado-card {
+      display:none;
+      background:#ffffff;
+      width:90%;
+      max-width:650px;
+      margin:20px auto;
+      padding:20px;
+      border-radius:15px;
+      box-shadow:0 4px 10px rgba(0,0,0,0.1);
+      text-align:left;
+      border-left:8px solid var(--verde21);
+      opacity:0;
+      transform: translateY(10px);
+      transition: all 0.4s ease;
+    }
 
-  /* Footer small */
-  .meta{margin-top:12px; color:var(--muted); font-size:13px}
-</style>
-
-<!-- Leaflet -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    #map {
+      height: 350px;
+      width: 90%;
+      max-width: 650px;
+      margin: 20px auto;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    }
+  </style>
 </head>
+
 <body>
 
-<header>
-  <!-- Puedes reemplazar logo src con el logo oficial si querés -->
-  <img src="https://www.universidadsiglo21.edu.ar/themes/custom/us21/logo.svg" alt="Siglo 21 logo" onerror="this.style.display='none'"/>
-  <h1>Buscador de Centros Siglo 21</h1>
-</header>
+<header>Buscador de Centros Siglo 21</header>
 
-<div class="container">
-  <div class="hero">
-    <!-- Left: info + search -->
-    <div class="panel">
-      <p class="title">Encontrá el centro más cercano en segundos</p>
-      <p class="lead">Escribí la localidad, apretá <strong>ENTER</strong> o el botón y te muestro los <strong>2 centros</strong> más cercanos con mapa interactivo.</p>
+<h1>Encontrá tu centro más cercano</h1>
 
-      <div class="searchRow" style="margin-top:6px">
-        <input id="localidad" type="text" placeholder="Ej: Virrey del Pino — escribí y apreta ENTER" aria-label="Localidad" />
-        <button id="buscarBtn">Buscar</button>
-      </div>
-
-      <div class="small">SISTEMA: mapas libres (OpenStreetMap) + Leaflet. No se usa API Key.</div>
-
-      <div id="results" class="results" aria-live="polite" style="margin-top:18px">
-        <div id="firstCard" class="cardRes" role="status"></div>
-        <div id="secondCard" class="cardRes" role="status"></div>
-      </div>
-
-      <div class="meta">Consejo: mejor que los asesores escriban la localidad sin abreviaturas (ej: "Virrey del Pino").</div>
-    </div>
-
-    <!-- Right: Map -->
-    <div class="panel" style="padding:12px">
-      <div id="map"></div>
-    </div>
-  </div>
+<div class="card">
+  <input id="localidad" placeholder="Ingresá tu localidad..." />
+  <button onclick="buscarCentro()">Buscar centro</button>
 </div>
 
+<div id="resultado-card">
+  <h2 style="margin:0; color:#0c3b2e; display:flex; align-items:center; gap:8px;">
+    <span>📍</span> Resultado
+  </h2>
+  <div id="resultado" style="margin-top:10px; font-size:16px;"></div>
+</div>
+
+<div id="map"></div>
+
 <script>
-/* ======================
-   CENTROS: coordenadas fijas (las tuyas)
-   ====================== */
-const CENTROS = [
-  { id:'san_miguel', label:'Cau San Miguel', lat:-34.54313, lon:-58.71267, addr:'Av. León Gallardo 207, Muñiz' },
-  { id:'don_torcuato', label:'Cau Don Torcuato', lat:-34.47175, lon:-58.63324, addr:'Av. Ángel T. de Alvear 2555' },
-  { id:'hurlingham', label:'Cau Hurlingham', lat:-34.58626, lon:-58.63928, addr:'Arturo Jauretche 1435' },
-  { id:'canuelas', label:'Cau Cañuelas', lat:-35.0526, lon:-58.7541, addr:'Av. Libertad 1200' },
-  { id:'san_martin', label:'Cau San Martín', lat:-34.56873, lon:-58.5416, addr:'Sarmiento 1887' },
-  { id:'parque_leloir', label:'Cau Parque Leloir', lat:-34.63310, lon:-58.68760, addr:'Av. Martín Fierro 3246' },
-  { id:'munro', label:'Cau Munro', lat:-34.53050, lon:-58.52190, addr:'Vélez Sársfield 4898' },
-  { id:'merlo', label:'Cau Merlo', lat:-34.66930, lon:-58.72910, addr:'Avellaneda 673' },
-  { id:'banfield', label:'Cau Banfield', lat:-34.74188, lon:-58.39118, addr:'Vieytes 211' }
-];
+  // Centros con coordenadas exactas desde Google Maps
+  const centros = [
+    { nombre: "San Miguel", direccion: "Av. León Gallardo 207, Muñiz", lat: -34.54313, lon: -58.71267 },
+    { nombre: "Don Torcuato", direccion: "Ángel T. de Alvear 2555, Don Torcuato", lat: -34.47175, lon: -58.63324 },
+    { nombre: "Hurlingham", direccion: "Arturo Jauretche 1435, Hurlingham", lat: -34.58626, lon: -58.63928 },
+    { nombre: "Cañuelas", direccion: "Libertad 1200, Cañuelas", lat: -35.0526, lon: -58.7541 },
+    { nombre: "San Martín", direccion: "Sarmiento 1887, San Martín", lat: -34.56873, lon: -58.5416 },
+    { nombre: "Parque Leloir", direccion: "Martin Fierro 3246, Villa Udaondo", lat: -34.6331, lon: -58.6876 },
+    { nombre: "Munro", direccion: "Vélez Sarsfield 4898, Munro", lat: -34.5305, lon: -58.5219 },
+    { nombre: "Merlo", direccion: "Avellaneda 673, Merlo", lat: -34.6693, lon: -58.7291 },
+    { nombre: "Banfield", direccion: "Vieytes 211, Banfield", lat: -34.74188, lon: -58.39118 }
+  ];
 
-/* ======================
-   Util: Haversine (km)
-   ====================== */
-function haversineKm(lat1, lon1, lat2, lon2){
-  const R = 6371;
-  const dLat = (lat2-lat1)*Math.PI/180;
-  const dLon = (lon2-lon1)*Math.PI/180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
+  let map = L.map('map').setView([-34.60, -58.45], 10);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19
+  }).addTo(map);
 
-/* ======================
-   MAP Init (Leaflet)
-   ====================== */
-const map = L.map('map', { preferCanvas:true }).setView([-34.65, -58.5], 10);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19 }).addTo(map);
+  let routeLayer;
 
-let userMarker = null;
-let centroMarkers = [];
-let lines = [];
+  function trazarRuta(origen, destino) {
+    if (routeLayer) routeLayer.remove();
 
-/* Render resultados en tarjetas y mapa */
-function renderResults(sortedList, userLat, userLon){
-  const first = sortedList[0];
-  const second = sortedList[1];
-
-  // tarjetas
-  const firstCard = document.getElementById('firstCard');
-  const secondCard = document.getElementById('secondCard');
-
-  firstCard.innerHTML = `<h4>${first.label}</h4>
-    <div class="muted">${first.addr}</div>
-    <div style="margin-top:8px"><strong>${first.distance.toFixed(2)} km</strong> (aprox.)</div>`;
-  firstCard.classList.add('visible');
-
-  if (second) {
-    secondCard.innerHTML = `<h4>${second.label}</h4>
-      <div class="muted">${second.addr}</div>
-      <div style="margin-top:8px"><strong>${second.distance.toFixed(2)} km</strong> (aprox.)</div>`;
-    secondCard.classList.add('visible');
-  } else {
-    secondCard.innerHTML = '';
-    secondCard.classList.remove('visible');
+    fetch(`https://router.project-osrm.org/route/v1/driving/${origen.lon},${origen.lat};${destino.lon},${destino.lat}?overview=full&geometries=geojson`)
+      .then(res => res.json())
+      .then(data => {
+        const coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+        routeLayer = L.polyline(coords, {color:"green", weight:5}).addTo(map);
+        map.fitBounds(routeLayer.getBounds());
+      });
   }
 
-  // limpiar marcadores previos
-  if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
-  centroMarkers.forEach(m=>map.removeLayer(m)); centroMarkers = [];
-  lines.forEach(l=>map.removeLayer(l)); lines = [];
+  async function calcularTiempo(origen, destino) {
+    const url = `https://router.project-osrm.org/route/v1/driving/${origen.lon},${origen.lat};${destino.lon},${destino.lat}?overview=false`;
 
-  // crear marcador usuario
-  userMarker = L.marker([userLat, userLon], {title:'Localidad buscada'}).addTo(map).bindPopup(`<b>Localidad</b>`);
+    const res = await fetch(url);
+    const data = await res.json();
 
-  // marcar centros (primero y segundo)
-  [first, second].forEach((c, idx) => {
-    if (!c) return;
-    const m = L.marker([c.lat, c.lon], {title:c.label}).addTo(map)
-      .bindPopup(`<b>${c.label}</b><br>${c.addr}<br>${c.distance.toFixed(2)} km`);
-    centroMarkers.push(m);
-
-    // línea (directa) — estilo distinto para primero/segundo
-    const color = idx===0 ? '#0c3b2e' : '#1f7fb0';
-    const poly = L.polyline([[userLat, userLon],[c.lat, c.lon]], {color, weight:3, dashArray:'6 6'}).addTo(map);
-    lines.push(poly);
-  });
-
-  // ajustar vista para incluir todo
-  const bounds = L.latLngBounds([[userLat,userLon],[first.lat,first.lon]]);
-  if (second) bounds.extend([second.lat, second.lon]);
-  map.fitBounds(bounds.pad(0.25));
-}
-
-/* ======================
-   Geocode user (Nominatim) — no API key required
-   ====================== */
-async function geocodeLocalidad(q){
-  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q + ', Buenos Aires, Argentina')}&limit=1`;
-  const resp = await fetch(url, { headers:{ 'Accept-Language':'es' }});
-  if (!resp.ok) throw new Error('Error geocoding');
-  const j = await resp.json();
-  if (!j || j.length === 0) return null;
-  return { lat: parseFloat(j[0].lat), lon: parseFloat(j[0].lon), display_name: j[0].display_name };
-}
-
-/* ======================
-   Main search handler
-   ====================== */
-async function handleSearch(){
-  const q = document.getElementById('localidad').value.trim();
-  if (!q) { alert('Ingresá una localidad'); return; }
-
-  // geocode
-  let geo;
-  try {
-    geo = await geocodeLocalidad(q);
-    if (!geo) { alert('No se encontró la localidad. Probá con otra forma de escribirla.'); return; }
-  } catch(e){
-    alert('Error al geocodificar. Probá de nuevo.'); return;
+    return {
+      distancia: data.routes[0].distance / 1000,     // km
+      duracion: data.routes[0].duration / 60         // minutos
+    };
   }
 
-  // calcular distancias (Haversine fallback)
-  const lista = CENTROS.map(c => {
-    return {...c, distance: haversineKm(geo.lat, geo.lon, c.lat, c.lon) };
+  async function buscarCentro() {
+    const localidad = document.getElementById("localidad").value.trim();
+    if (!localidad) return;
+
+    // Buscar coordenadas de la localidad
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${localidad} Buenos Aires Argentina`);
+    const data = await res.json();
+
+    if (data.length === 0) {
+      alert("No se encontró la localidad.");
+      return;
+    }
+
+    const origen = { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+
+    let tiempos = [];
+
+    for (let c of centros) {
+      const info = await calcularTiempo(origen, c);
+      tiempos.push({ centro:c, ...info });
+    }
+
+    // Ordenar por duración de viaje
+    tiempos.sort((a,b) => a.duracion - b.duracion);
+
+    const primero = tiempos[0];
+    const segundo = tiempos[1];
+
+    document.getElementById("resultado-card").style.display = "block";
+    setTimeout(() => {
+      document.getElementById("resultado-card").style.opacity = "1";
+      document.getElementById("resultado-card").style.transform = "translateY(0)";
+    }, 10);
+
+    document.getElementById("resultado").innerHTML = `
+      <b>Centro más cercano:</b><br>
+      ${primero.centro.nombre}<br>
+      <b>Dirección:</b> ${primero.centro.direccion}<br>
+      <b>Tiempo:</b> ${primero.duracion.toFixed(1)} min<br>
+      <b>Distancia:</b> ${primero.distancia.toFixed(1)} km<br><br>
+
+      <b>Segundo centro más cercano:</b><br>
+      ${segundo.centro.nombre}<br>
+      <b>Dirección:</b> ${segundo.centro.direccion}<br>
+      <b>Tiempo:</b> ${segundo.duracion.toFixed(1)} min<br>
+      <b>Distancia:</b> ${segundo.distancia.toFixed(1)} km
+    `;
+
+    // Dibujar ruta hacia el centro más cercano
+    trazarRuta(origen, primero.centro);
+  }
+
+  document.getElementById("localidad").addEventListener("keypress", e => {
+    if (e.key === "Enter") buscarCentro();
   });
-
-  lista.sort((a,b)=>a.distance - b.distance);
-
-  // render
-  renderResults(lista, geo.lat, geo.lon);
-}
-
-/* ======================
-   UX: eventos
-   ====================== */
-document.getElementById('buscarBtn').addEventListener('click', handleSearch);
-document.getElementById('localidad').addEventListener('keypress', e => { if (e.key === 'Enter') handleSearch(); });
-
-/* ======================
-   Small accessibility focus: focus input on load
-   ====================== */
-window.addEventListener('load', ()=>{ setTimeout(()=>{ document.getElementById('localidad').focus(); }, 300); });
-
 </script>
+
 </body>
 </html>
