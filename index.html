@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Buscador de Centros CAU — Tiempo de viaje</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+  :root{
+    --ink:#0f172a;
+    --ink-2:#334155;
+    --muted:#64748b;
+    --line:#e2e8f0;
+    --bg:#f8fafc;
+    --card:#ffffff;
+    --brand:#0f3d33;
+    --brand-2:#14574a;
+    --brand-soft:#e6f0ed;
+    --second:#475569;
+    --second-soft:#eef1f5;
+    --radius:14px;
+    --shadow:0 1px 2px rgba(15,23,42,.04), 0 8px 24px rgba(15,23,42,.06);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:"Inter", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    background:var(--bg); color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---------- Header ---------- */
+  header{
+    background:var(--brand);
+    color:#fff;
+    border-bottom:1px solid rgba(255,255,255,.08);
+  }
+  .header-inner{
+    max-width:1180px; margin:0 auto; padding:18px 24px;
+    display:flex; align-items:center; gap:14px;
+  }
+  .logo{
+    width:36px; height:36px; border-radius:10px;
+    background:rgba(255,255,255,.12);
+    display:grid; place-items:center; flex:none;
+  }
+  .logo svg{width:20px; height:20px}
+  header h1{font-size:17px; margin:0; font-weight:600; letter-spacing:-.01em}
+  header p{margin:2px 0 0; font-size:13px; color:rgba(255,255,255,.7)}
+
+  /* ---------- Layout ---------- */
+  .container{max-width:1180px; margin:28px auto; padding:0 24px}
+  .grid{display:grid; grid-template-columns:420px 1fr; gap:24px; align-items:start}
+  @media(max-width:980px){ .grid{grid-template-columns:1fr} }
+
+  .panel{
+    background:var(--card); border:1px solid var(--line);
+    border-radius:var(--radius); box-shadow:var(--shadow);
+  }
+  .panel-body{padding:24px}
+
+  .title{font-size:18px; margin:0 0 6px; font-weight:650; letter-spacing:-.01em}
+  .lead{color:var(--muted); margin:0 0 20px; font-size:14px; line-height:1.55}
+  .lead strong{color:var(--ink-2); font-weight:600}
+
+  /* ---------- Search ---------- */
+  .searchRow{display:flex; gap:8px}
+  .field{position:relative; flex:1}
+  .field svg{
+    position:absolute; left:12px; top:50%; transform:translateY(-50%);
+    width:18px; height:18px; color:var(--muted); pointer-events:none;
+  }
+  .field input{
+    width:100%; padding:12px 14px 12px 38px; font:inherit; font-size:14.5px;
+    border:1px solid var(--line); border-radius:10px; background:#fff; color:var(--ink);
+    transition:border-color .15s, box-shadow .15s;
+  }
+  .field input::placeholder{color:#94a3b8}
+  .field input:focus{
+    outline:none; border-color:var(--brand-2);
+    box-shadow:0 0 0 3px rgba(20,87,74,.15);
+  }
+  .btn{
+    font:inherit; font-size:14px; font-weight:600; cursor:pointer;
+    padding:0 18px; border-radius:10px; border:1px solid transparent;
+    background:var(--brand); color:#fff; transition:background .15s, transform .05s;
+  }
+  .btn:hover{background:var(--brand-2)}
+  .btn:active{transform:translateY(1px)}
+  .btn.secondary{background:#fff; color:var(--ink-2); border-color:var(--line)}
+  .btn.secondary:hover{background:var(--bg)}
+
+  .status{
+    display:flex; align-items:center; gap:8px;
+    font-size:13px; color:var(--muted); margin:14px 0 2px; min-height:20px;
+  }
+  .dot{width:7px; height:7px; border-radius:50%; background:#94a3b8; flex:none}
+  .status.ok .dot{background:#16a34a}
+  .status.err .dot{background:#dc2626}
+  .loader{
+    width:14px; height:14px; border-radius:50%; flex:none;
+    border:2px solid var(--line); border-top-color:var(--brand-2);
+    animation:spin .8s linear infinite;
+  }
+  @keyframes spin{ to{transform:rotate(360deg)} }
+
+  /* ---------- Result cards ---------- */
+  .results{margin-top:18px; display:flex; flex-direction:column; gap:12px}
+  .cardRes{
+    border:1px solid var(--line); border-radius:12px; padding:16px;
+    background:#fff; display:none;
+    opacity:0; transform:translateY(8px);
+    transition:opacity .3s ease, transform .3s ease;
+  }
+  .cardRes.visible{display:block; opacity:1; transform:none}
+  .cardRes.first{border-color:#b9d3cb; background:linear-gradient(180deg,#fff,var(--brand-soft) 220%)}
+
+  .card-top{display:flex; align-items:center; gap:10px; margin-bottom:10px}
+  .rank{
+    font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+    padding:4px 9px; border-radius:999px;
+    background:var(--second-soft); color:var(--second);
+  }
+  .first .rank{background:var(--brand); color:#fff}
+  .cardRes h4{margin:0; font-size:16px; font-weight:650; letter-spacing:-.01em}
+  .addr{color:var(--muted); font-size:13px; line-height:1.45; margin:0 0 14px}
+
+  .stats{display:flex; gap:24px; padding-top:12px; border-top:1px solid var(--line)}
+  .stat .v{font-size:22px; font-weight:700; letter-spacing:-.02em; line-height:1.1}
+  .stat .v small{font-size:13px; font-weight:500; color:var(--muted); margin-left:2px}
+  .stat .l{font-size:12px; color:var(--muted); margin-top:3px}
+  .first .stat .v{color:var(--brand)}
+
+  .meta{font-size:12px; color:var(--muted); margin-top:18px; line-height:1.5}
+
+  /* ---------- Map ---------- */
+  .map-panel{padding:10px}
+  #map{height:620px; border-radius:10px; overflow:hidden}
+  @media(max-width:980px){ #map{height:420px} }
+
+  .pin{
+    width:30px; height:30px; border-radius:50% 50% 50% 0; transform:rotate(-45deg);
+    display:grid; place-items:center; border:2px solid #fff;
+    box-shadow:0 2px 6px rgba(15,23,42,.3);
+  }
+  .pin span{transform:rotate(45deg); color:#fff; font-size:12px; font-weight:700}
+  .pin.p1{background:var(--brand)}
+  .pin.p2{background:var(--second)}
+  .pin.user{background:#2563eb}
+  .leaflet-popup-content{font-family:inherit; font-size:13px; line-height:1.45}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="logo" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+    </div>
+    <div>
+      <h1>Buscador de Centros CAU</h1>
+      <p>Encontrá el centro más cercano por tiempo de viaje</p>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <div class="grid">
+
+    <section class="panel">
+      <div class="panel-body">
+        <h2 class="title">¿Desde dónde salís?</h2>
+        <p class="lead">Escribí la localidad y presioná <strong>Enter</strong> o <strong>Buscar</strong>. Calculamos el tiempo estimado en auto a cada centro y te mostramos los 2 mejores.</p>
+
+        <div class="searchRow">
+          <div class="field">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input id="localidad" placeholder="Ej: Virrey del Pino" aria-label="Localidad" autocomplete="off">
+          </div>
+          <button id="buscarBtn" class="btn">Buscar</button>
+          <button id="limpiarBtn" class="btn secondary">Limpiar</button>
+        </div>
+
+        <div id="status" class="status"><span class="dot"></span><span>Listo</span></div>
+
+        <div class="results" id="results">
+          <article id="firstCard" class="cardRes first" aria-live="polite"></article>
+          <article id="secondCard" class="cardRes second" aria-live="polite"></article>
+        </div>
+
+        <p class="meta">Motor de rutas: OSRM público (sin API key). Si falla, se usa la distancia en línea recta como respaldo.</p>
+      </div>
+    </section>
+
+    <section class="panel map-panel">
+      <div id="map"></div>
+    </section>
+
+  </div>
+</div>
+
+<script>
+/* ============================
+   CONFIG & DATA
+   ============================ */
+const CENTROS = [
+  { id:'san_miguel',    label:'CAU San Miguel',    lat:-34.5523947, lon:-58.698472, addr:'Av. León Gallardo 207, Muñiz' },
+  { id:'don_torcuato',  label:'CAU Don Torcuato',  lat:-34.4890262, lon:-58.6215743, addr:'Av. Ángel T. de Alvear 2555, Don Torcuato' },
+  { id:'hurlingham',    label:'CAU Hurlingham',    lat:-34.5916001, lon:-58.6350931, addr:'Arturo Jauretche 1435, Hurlingham' },
+  { id:'canuelas',      label:'CAU Cañuelas',      lat:-35.0514794,  lon:-58.7644732,  addr:'Av. Libertad 1200, Cañuelas' },
+  { id:'san_martin',    label:'CAU San Martín',    lat:-34.5761084, lon:-58.5332952,  addr:'Sarmiento 1887, San Martín' },
+  { id:'munro',         label:'CAU Munro',         lat:-34.5316903, lon:-58.526315, addr:'Vélez Sársfield 4898, Munro' },
+  { id:'banfield',      label:'CAU Banfield',      lat:-34.7401747, lon:-58.3971434, addr:'Vieytes 211, Banfield' },
+  { id:'lomas_zamora',  label:'CAU Lomas de Zamora', lat:-34.761113, lon:-58.4054323, addr:'Cornelio Saavedra 98, Lomas de Zamora' },
+  { id:'temperley',     label:'CAU Temperley',     lat:-34.7742792, lon:-58.3938074, addr:'Av. Almirante Brown 3191, Temperley' }
+];
+
+const OSRM_BASE = 'https://router.project-osrm.org';
+
+// Caché persistente (v2: se renovó la lista de centros, así que se descarta la caché vieja)
+const CACHE_KEY = 'localidad_cache_v3';
+try { localStorage.removeItem('localidad_cache'); localStorage.removeItem('localidad_cache_v2'); } catch(e) {}
+
+let CACHE = new Map();
+try {
+  const cachedData = localStorage.getItem(CACHE_KEY);
+  if (cachedData) CACHE = new Map(JSON.parse(cachedData));
+} catch(e) {
+  console.error('Error al leer la caché de localStorage:', e);
+}
+
+function saveCacheToLocalStorage(){
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(Array.from(CACHE.entries())));
+  } catch(e) {
+    console.error('Error al guardar la caché en localStorage:', e);
+  }
+}
+
+/* ============================
+   UTIL: Haversine (km)
+   ============================ */
+function haversineKm(lat1, lon1, lat2, lon2){
+  const R = 6371;
+  const dLat = (lat2-lat1)*Math.PI/180;
+  const dLon = (lon2-lon1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+/* ============================
+   MAP Init
+   ============================ */
+const map = L.map('map', { preferCanvas:true, zoomControl:true }).setView([-34.65, -58.55], 10);
+// Mapas públicos de Esri: gratis, sin API key y sin bloqueo por "Referer"
+const esriAttr = 'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, OpenStreetMap contributors';
+const baseCalles = L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+  { maxZoom:19, attribution:esriAttr }
+);
+const baseClaro = L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+  { maxZoom:16, attribution:esriAttr }
+);
+baseCalles.addTo(map);
+L.control.layers({ 'Calles': baseCalles, 'Gris claro': baseClaro }, null, { position:'topright', collapsed:true }).addTo(map);
+
+let userMarker = null;
+let centroMarkers = [];
+let routeLayers = [];
+
+function pinIcon(cls, text){
+  return L.divIcon({
+    className:'',
+    html:`<div class="pin ${cls}"><span>${text}</span></div>`,
+    iconSize:[30,30],
+    iconAnchor:[15,30],
+    popupAnchor:[0,-28]
+  });
+}
+
+/* ============================
+   UI helpers
+   ============================ */
+const statusEl = document.getElementById('status');
+function setStatus(text, state=''){
+  // state: 'busy' | 'ok' | 'err' | ''
+  statusEl.className = 'status ' + (state === 'busy' ? '' : state);
+  const icon = state === 'busy' ? '<span class="loader"></span>' : '<span class="dot"></span>';
+  statusEl.innerHTML = `${icon}<span>${text}</span>`;
+}
+
+/* ============================
+   Geocode (Nominatim)
+   ============================ */
+async function geocodeLocalidad(q){
+  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q + ', Buenos Aires, Argentina')}&limit=1`;
+  const r = await fetch(url, { headers:{ 'Accept-Language':'es' }});
+  if (!r.ok) throw new Error('Error geocoding');
+  const j = await r.json();
+  if (!j || j.length === 0) return null;
+  return { lat: parseFloat(j[0].lat), lon: parseFloat(j[0].lon), display_name: j[0].display_name };
+}
+
+/* ============================
+   OSRM
+   ============================ */
+async function osrmDuration(origin, dest){
+  const url = `${OSRM_BASE}/route/v1/driving/${origin.lon},${origin.lat};${dest.lon},${dest.lat}?overview=false`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('OSRM error: ' + r.status);
+  const j = await r.json();
+  if (!j.routes || !j.routes[0]) throw new Error('OSRM no route');
+  return { duration_s: j.routes[0].duration, distance_m: j.routes[0].distance };
+}
+
+async function osrmRouteGeoJson(origin, dest){
+  const url = `${OSRM_BASE}/route/v1/driving/${origin.lon},${origin.lat};${dest.lon},${dest.lat}?overview=full&geometries=geojson`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('OSRM error: ' + r.status);
+  const j = await r.json();
+  if (!j.routes || !j.routes[0]) throw new Error('OSRM no route');
+  return j.routes[0].geometry;
+}
+
+/* ============================
+   Render
+   ============================ */
+function clearMapGraphics(){
+  if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
+  centroMarkers.forEach(m => map.removeLayer(m)); centroMarkers = [];
+  routeLayers.forEach(l => map.removeLayer(l)); routeLayers = [];
+}
+
+function cardHTML(c, rankLabel){
+  const hasTime = c.duration_min != null && !isNaN(c.duration_min);
+  const time = hasTime ? Math.round(c.duration_min) : null;
+  const km = c.distance_km ? c.distance_km.toFixed(1) : null;
+  return `
+    <div class="card-top">
+      <span class="rank">${rankLabel}</span>
+      <h4>${c.label}</h4>
+    </div>
+    <p class="addr">${c.addr}</p>
+    <div class="stats">
+      <div class="stat"><div class="v">${time ?? '—'}<small>min</small></div><div class="l">${c.fallback ? 'Tiempo aprox.' : 'Tiempo en auto'}</div></div>
+      <div class="stat"><div class="v">${km ?? '—'}<small>km</small></div><div class="l">${c.fallback ? 'En línea recta' : 'Por ruta'}</div></div>
+    </div>`;
+}
+
+function renderCardsAndMap(sortedList, userLat, userLon, routes={first:null, second:null}){
+  const first = sortedList[0];
+  const second = sortedList[1];
+
+  const firstCard = document.getElementById('firstCard');
+  const secondCard = document.getElementById('secondCard');
+
+  firstCard.innerHTML = cardHTML(first, 'Más cercano');
+  firstCard.classList.add('visible');
+
+  if (second){
+    secondCard.innerHTML = cardHTML(second, 'Segunda opción');
+    secondCard.classList.add('visible');
+  } else {
+    secondCard.innerHTML = '';
+    secondCard.classList.remove('visible');
+  }
+
+  // mapa
+  clearMapGraphics();
+  userMarker = L.marker([userLat, userLon], { icon: pinIcon('user','•') })
+    .addTo(map).bindPopup('Localidad buscada');
+
+  [first, second].forEach((c, idx) => {
+    if (!c) return;
+    const m = L.marker([c.lat, c.lon], { icon: pinIcon(idx === 0 ? 'p1' : 'p2', idx + 1) })
+      .addTo(map).bindPopup(`<b>${c.label}</b><br>${c.addr}`);
+    centroMarkers.push(m);
+  });
+
+  // rutas (geojson) o línea recta de respaldo
+  if (routes.first){
+    routeLayers.push(L.geoJSON(routes.first, { style:{ color:'#0f3d33', weight:5, opacity:.9 } }).addTo(map));
+  } else {
+    routeLayers.push(L.polyline([[userLat,userLon],[first.lat, first.lon]], { color:'#0f3d33', weight:3, dashArray:'6 6' }).addTo(map));
+  }
+
+  if (second){
+    if (routes.second){
+      routeLayers.push(L.geoJSON(routes.second, { style:{ color:'#64748b', weight:4, opacity:.85 } }).addTo(map));
+    } else {
+      routeLayers.push(L.polyline([[userLat,userLon],[second.lat, second.lon]], { color:'#64748b', weight:3, dashArray:'6 6' }).addTo(map));
+    }
+  }
+
+  const bounds = L.latLngBounds([[userLat,userLon],[first.lat, first.lon]]);
+  if (second) bounds.extend([second.lat, second.lon]);
+  map.fitBounds(bounds.pad(0.25));
+}
+
+/* ============================
+   Búsqueda principal
+   ============================ */
+async function handleSearch(){
+  const q = document.getElementById('localidad').value.trim();
+  if (!q) { setStatus('Ingresá una localidad', 'err'); return; }
+
+  setStatus('Buscando localidad…', 'busy');
+  const cacheKey = q.toLowerCase();
+
+  if (CACHE.has(cacheKey)){
+    const cached = CACHE.get(cacheKey);
+    renderCardsAndMap(cached.sorted, cached.user.lat, cached.user.lon, cached.geojson || {});
+    setStatus('Resultado listo (caché local)', 'ok');
+    return;
+  }
+
+  // 1) geocode
+  let geo;
+  try {
+    geo = await geocodeLocalidad(q);
+    if (!geo) { setStatus('No se encontró la localidad. Probá otra variación.', 'err'); return; }
+  } catch(e){
+    console.error(e);
+    setStatus('Error al buscar la localidad. Intentá de nuevo.', 'err');
+    return;
+  }
+
+  setStatus('Calculando tiempos de viaje…', 'busy');
+
+  // 2) duración a cada centro en paralelo
+  const origin = { lat: geo.lat, lon: geo.lon };
+  const promises = CENTROS.map(c => (
+    osrmDuration(origin, { lat:c.lat, lon:c.lon })
+      .then(res => ({ ...c, duration_s: res.duration_s, distance_m: res.distance_m }))
+      .catch(err => {
+        console.warn('OSRM falló para', c.label, err.message);
+        const d_km = haversineKm(origin.lat, origin.lon, c.lat, c.lon);
+        return { ...c, duration_s: (d_km / 50) * 3600, distance_m: d_km*1000, fallback:true };
+      })
+  ));
+
+  let results;
+  try {
+    results = await Promise.all(promises);
+  } catch(e){
+    console.warn('Error en promesas OSRM', e);
+    setStatus('Error al calcular tiempos', 'err');
+    return;
+  }
+
+  const sorted = results.map(r => ({
+    ...r,
+    duration_min: r.duration_s/60,
+    distance_km: r.distance_m ? r.distance_m/1000 : haversineKm(origin.lat, origin.lon, r.lat, r.lon)
+  })).sort((a,b) => a.duration_min - b.duration_min);
+
+  setStatus('Trazando rutas…', 'busy');
+
+  // 3) geometrías solo para los 2 mejores
+  let geojsonFirst = null, geojsonSecond = null;
+  try {
+    if (sorted[0]) geojsonFirst  = await osrmRouteGeoJson(origin, { lat:sorted[0].lat, lon:sorted[0].lon });
+    if (sorted[1]) geojsonSecond = await osrmRouteGeoJson(origin, { lat:sorted[1].lat, lon:sorted[1].lon });
+  } catch(e){
+    console.warn('No se pudo obtener la geometría (se usa línea recta):', e.message);
+  }
+
+  CACHE.set(cacheKey, { user:origin, sorted, geojson:{ first:geojsonFirst, second:geojsonSecond } });
+  saveCacheToLocalStorage();
+
+  renderCardsAndMap(sorted, origin.lat, origin.lon, { first:geojsonFirst, second:geojsonSecond });
+  setStatus('Resultado listo', 'ok');
+}
+
+/* ============================
+   EVENTS
+   ============================ */
+document.getElementById('buscarBtn').addEventListener('click', handleSearch);
+document.getElementById('limpiarBtn').addEventListener('click', () => {
+  document.getElementById('localidad').value = '';
+  ['firstCard','secondCard'].forEach(id => document.getElementById(id).classList.remove('visible'));
+  setStatus('Listo');
+  clearMapGraphics();
+  map.setView([-34.65, -58.55], 10);
+  document.getElementById('localidad').focus();
+});
+document.getElementById('localidad').addEventListener('keydown', e => { if (e.key === 'Enter') handleSearch(); });
+
+window.addEventListener('load', () => {
+  const input = document.getElementById('localidad');
+  setTimeout(() => input.focus(), 300);
+
+  // Cargar el último resultado guardado
+  if (CACHE.size > 0) {
+    const last = Array.from(CACHE.keys()).pop();
+    const cached = CACHE.get(last);
+    if (last && cached) {
+      input.value = last;
+      renderCardsAndMap(cached.sorted, cached.user.lat, cached.user.lon, cached.geojson || {});
+      setStatus('Último resultado cargado desde caché', 'ok');
+    }
+  }
+});
+</script>
+</body>
+</html>
